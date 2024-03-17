@@ -17,6 +17,7 @@ This device supports following
 - Gamepad
 - Keyboards
 
+USB supports 4 port Hubs. Only good quality hubs work correctly.
 
 WCHISPTool_CMD 
 Application download address: https://www.wch.cn/downloads/WCHISPTool_Setup_exe.html
