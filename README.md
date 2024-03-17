@@ -1,3 +1,7 @@
+
+![PCB](https://github.com/arkadiuszmakarenko/ReAmiga1200USBHID/assets/5903872/26648a14-64e9-4a42-a82d-14dc1d464c64)
+
+
 Mouse Driver
 Mouse driver has been provided by sq7bti.
 
