@@ -32,4 +32,5 @@ Windows has GUI application.
 - Download firmware to the chip.
 
 
-
+**This project is open source. Contact me if you want copy of source code, KiCad 7 PCB project and link to source code for drivers. 
+I am planning to tidy it up and publish it on Github when I find some time. Currently it is in semi ogranized chaos state, not suitable for use without some explanation.**
