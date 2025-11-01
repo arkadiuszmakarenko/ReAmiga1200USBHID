@@ -43,6 +43,7 @@ static DRESULT msc_receive_csw(void);
 static DRESULT msc_test_unit_ready(void);
 static DRESULT msc_write_sector(DWORD sector, uint8_t* buffer);
 static void reset_endpoints(void);
+static DRESULT msc_mass_storage_reset(void);
 
 /*-----------------------------------------------------------------------*/
 /* Initialize Disk Drive                                                 */
@@ -128,13 +129,13 @@ DSTATUS disk_initialize (void)
     
     // Add small delay to let device settle after endpoint discovery
     // Some USB devices need time between enumeration and first SCSI command
-    for (volatile int i = 0; i < 20000; i++); // ~20ms delay (increased from 10ms)
+    for (volatile int i = 0; i < 100000; i++); // ~100ms delay (significantly increased)
     
     if (msc_test_unit_ready() == RES_OK) {
         // DUG_PRINTF("Unit ready - disk initialized successfully\r\n");
         
         // Additional settling time after Test Unit Ready
-        for (volatile int i = 0; i < 10000; i++); // 10ms delay (increased from 5ms)
+        for (volatile int i = 0; i < 20000; i++); // 20ms delay (increased from 10ms)
         
         disk_initialized = 1;  // Mark as initialized
         stat = 0; // Success
@@ -169,6 +170,12 @@ static void reset_endpoints(void)
     msc_bulk_in_tog = 0;
     msc_bulk_out_tog = 0;
     
+    // Clear HALT (STALL) on bulk endpoints
+    uint8_t ep0 = 64; // Default EP0 max packet size
+    USBFSH_ClearEndpStall(ep0, (uint8_t)(0x80 | msc_bulk_in_endp));
+    for (volatile int i = 0; i < 2000; i++); // 2ms delay
+    USBFSH_ClearEndpStall(ep0, msc_bulk_out_endp);
+    
     // Add delay to let USB settle
     for (volatile int i = 0; i < 5000; i++); // 5ms delay
 }
@@ -180,6 +187,7 @@ static DRESULT msc_send_cbw(uint8_t *cdb, uint8_t cdb_len, uint32_t data_len, ui
 {
     UDISK_BOC_CBW cbw;
     uint8_t res;
+    int retry_count = 0;
     
     // Fill CBW structure
     cbw.mCBW_Sig = (USB_BO_CBW_SIG3 << 24) | (USB_BO_CBW_SIG2 << 16) | (USB_BO_CBW_SIG1 << 8) | USB_BO_CBW_SIG0;
@@ -194,15 +202,27 @@ static DRESULT msc_send_cbw(uint8_t *cdb, uint8_t cdb_len, uint32_t data_len, ui
     // DUG_PRINTF("Sending CBW: Tag=0x%08x, DataLen=%d, Dir=0x%02x, CDB[0]=0x%02x\r\n", 
     //            cbw.mCBW_Tag, cbw.mCBW_DataLen, cbw.mCBW_Flag, cdb[0]);
     
-    // Send CBW
-    res = USBFSH_SendEndpData(msc_bulk_out_endp, &msc_bulk_out_tog, (uint8_t*)&cbw, sizeof(cbw));
-    if (res != ERR_SUCCESS) {
-        DUG_PRINTF("CBW send failed: USB error %02x\r\n", res);
-        return RES_ERROR;
-    }
+    // Send CBW with retries similar to working FATFS implementation
+    do {
+        res = USBFSH_SendEndpData(msc_bulk_out_endp, &msc_bulk_out_tog, (uint8_t*)&cbw, sizeof(cbw));
+        if (res == ERR_SUCCESS) {
+            // DUG_PRINTF("CBW sent successfully\r\n");
+            return RES_OK;
+        }
+        
+        // Occasionally clear HALT and reset toggle on persistent errors
+        if ((retry_count % 10) == 9) {
+            uint8_t ep0 = 64; // Default EP0 max packet size
+            USBFSH_ClearEndpStall(ep0, msc_bulk_out_endp);
+            msc_bulk_out_tog = 0;
+            for (volatile int i = 0; i < 2000; i++); // 2ms delay
+        }
+        for (volatile int i = 0; i < 1000; i++); // 1ms delay between retries
+        retry_count++;
+    } while (retry_count < 40);
     
-    // DUG_PRINTF("CBW sent successfully\r\n");
-    return RES_OK;
+    DUG_PRINTF("CBW send failed after %d retries: USB error %02x\r\n", retry_count, res);
+    return RES_ERROR;
 }
 
 /*-----------------------------------------------------------------------*/
@@ -213,35 +233,31 @@ static DRESULT msc_receive_csw(void)
     UDISK_BOC_CSW csw;
     uint16_t len;
     uint8_t res;
+    int retry_count = 0;
     
     // DUG_PRINTF("Receiving CSW...\r\n");
     
-    // Receive CSW
-    res = USBFSH_GetEndpData(msc_bulk_in_endp, &msc_bulk_in_tog, (uint8_t*)&csw, &len);
-    if (res != ERR_SUCCESS) {
-        DUG_PRINTF("CSW receive failed: USB error %02x\r\n", res);
-        
-        // Try to recover from USB errors
-        if (res == 0x2a || res == 0x2b) { // Handle both timeout and stall errors
-            DUG_PRINTF("Attempting CSW error recovery...\r\n");
-            
-            // Comprehensive endpoint reset
-            reset_endpoints();
-            
-            // Longer delay for device recovery
-            for (volatile int i = 0; i < 10000; i++); // 10ms delay
-            
-            // Retry CSW receive
-            res = USBFSH_GetEndpData(msc_bulk_in_endp, &msc_bulk_in_tog, (uint8_t*)&csw, &len);
-            if (res != ERR_SUCCESS) {
-                DUG_PRINTF("CSW recovery failed: USB error %02x\r\n", res);
-                return RES_ERROR;
-            } else {
-                DUG_PRINTF("CSW recovery successful\r\n");
-            }
-        } else {
-            return RES_ERROR;
+    // Receive CSW with retries similar to working FATFS implementation
+    do {
+        res = USBFSH_GetEndpData(msc_bulk_in_endp, &msc_bulk_in_tog, (uint8_t*)&csw, &len);
+        if (res == ERR_SUCCESS) {
+            break; // Success, continue with validation
         }
+        
+        // Occasionally clear HALT and reset toggle on persistent errors
+        if ((retry_count % 10) == 9) {
+            uint8_t ep0 = 64; // Default EP0 max packet size
+            USBFSH_ClearEndpStall(ep0, (uint8_t)(0x80 | msc_bulk_in_endp));
+            msc_bulk_in_tog = 0;
+            for (volatile int i = 0; i < 2000; i++); // 2ms delay
+        }
+        for (volatile int i = 0; i < 1000; i++); // 1ms delay between retries
+        retry_count++;
+    } while (retry_count < 60);
+    
+    if (res != ERR_SUCCESS) {
+        DUG_PRINTF("CSW receive failed after %d retries: USB error %02x\r\n", retry_count, res);
+        return RES_ERROR;
     }
     
     if (len != sizeof(csw)) {
@@ -276,12 +292,11 @@ static DRESULT msc_test_unit_ready(void)
 {
     uint8_t cdb[6] = {SCSI_TEST_UNIT_READY, 0, 0, 0, 0, 0};
     DRESULT cbw_res, csw_res;
-    uint8_t retry_count = 0;
     
     // DUG_PRINTF("SCSI Test Unit Ready...\r\n");
     
-    // Retry Test Unit Ready up to 3 times with delays
-    do {
+    // Try Test Unit Ready with mass storage reset recovery on failure
+    for (int attempt = 0; attempt < 2; attempt++) {
         cbw_res = msc_send_cbw(cdb, 6, 0, 0x00);
         if (cbw_res != RES_OK) {
             DUG_PRINTF("CBW send failed: %d\r\n", cbw_res);
@@ -294,17 +309,48 @@ static DRESULT msc_test_unit_ready(void)
             return RES_OK;
         }
         
-        // If failed, wait before retry
-        if (retry_count < 2) {
-            DUG_PRINTF("Test Unit Ready retry %d after delay...\r\n", retry_count + 1);
-            for (volatile int i = 0; i < 10000; i++); // 10ms delay between retries
+        // On first failure, try recovery
+        if (attempt == 0) {
+            DUG_PRINTF("Test Unit Ready failed, attempting recovery...\r\n");
+            msc_mass_storage_reset();
+            for (volatile int i = 0; i < 5000; i++); // 5ms delay after reset
         }
-        
-        retry_count++;
-    } while (retry_count < 3);
+    }
     
-    DUG_PRINTF("Test Unit Ready failed after %d retries\r\n", retry_count);
+    DUG_PRINTF("Test Unit Ready failed after recovery attempt\r\n");
     return csw_res;
+}
+
+/*-----------------------------------------------------------------------*/
+/* Helper function: Mass Storage Reset for error recovery               */
+/*-----------------------------------------------------------------------*/
+static DRESULT msc_mass_storage_reset(void)
+{
+    // Mass Storage Reset is a class-specific control request
+    // This would normally be sent over EP0, but for simplicity we'll just
+    // reset our endpoint states and clear stalls
+    
+    DUG_PRINTF("Performing Mass Storage Reset...\r\n");
+    
+    // Clear endpoint stalls and reset toggles
+    uint8_t ep0 = 64; // Default EP0 max packet size
+    
+    // Clear HALT on IN endpoint
+    USBFSH_ClearEndpStall(ep0, (uint8_t)(0x80 | msc_bulk_in_endp));
+    for (volatile int i = 0; i < 2000; i++); // 2ms delay
+    
+    // Clear HALT on OUT endpoint  
+    USBFSH_ClearEndpStall(ep0, msc_bulk_out_endp);
+    for (volatile int i = 0; i < 2000; i++); // 2ms delay
+    
+    // Reset data toggles
+    msc_bulk_in_tog = 0;
+    msc_bulk_out_tog = 0;
+    
+    // Wait for device recovery
+    for (volatile int i = 0; i < 20000; i++); // 20ms delay
+    
+    return RES_OK;
 }
 
 /*-----------------------------------------------------------------------*/
@@ -371,10 +417,9 @@ DRESULT disk_readp (
 	UINT count		/* Byte count (bit15:destination) */
 )
 {
-	DRESULT res = RES_ERROR;
 	uint8_t cdb[10];
 	uint8_t sector_buffer[512];  // Standard sector size
-	uint16_t len;
+	uint16_t packet_len;
 	uint8_t usb_res;
 
 	// Check if endpoints are initialized
@@ -401,45 +446,67 @@ DRESULT disk_readp (
 		return RES_ERROR;
 	}
 
+	// Add delay after CBW send similar to working FATFS implementation
+	for (volatile int i = 0; i < 2000; i++); // 2ms delay
+
 	// Read sector data
 	// DUG_PRINTF("Reading sector data (512 bytes)...\r\n");
 	
 	// Read 512 bytes in multiple USB packets (64 bytes each)
 	uint16_t bytes_read = 0;
-	uint16_t packet_len;
 	uint8_t packets_needed = 512 / 64;  // 8 packets of 64 bytes each
 	
 	for (uint8_t packet = 0; packet < packets_needed; packet++) {
-		usb_res = USBFSH_GetEndpData(msc_bulk_in_endp, &msc_bulk_in_tog, 
-		                             &sector_buffer[bytes_read], &packet_len);
-		if (usb_res != ERR_SUCCESS) {
-			DUG_PRINTF("Data read failed at packet %d: USB error %02x\r\n", packet, usb_res);
+		int nak_retries = 0;
+		
+		// Use retry mechanism similar to working FATFS implementation
+		do {
+			packet_len = 64; // Expected packet size
+			usb_res = USBFSH_GetEndpData(msc_bulk_in_endp, &msc_bulk_in_tog, 
+			                             &sector_buffer[bytes_read], &packet_len);
 			
-			// Try comprehensive error recovery for USB errors
-			if ((usb_res == 0x2a || usb_res == 0x2b) && packet == 0) {
-				// First packet failed, device might need recovery
-				DUG_PRINTF("Attempting comprehensive error recovery...\r\n");
-				
-				// Reset endpoints and wait longer
-				reset_endpoints();
-				for (volatile int i = 0; i < 20000; i++); // 20ms delay for recovery
-				
-				// Reset packet counter and try again from beginning
-				bytes_read = 0;
-				packet = 0;
-				
-				usb_res = USBFSH_GetEndpData(msc_bulk_in_endp, &msc_bulk_in_tog, 
-				                             &sector_buffer[bytes_read], &packet_len);
-				if (usb_res != ERR_SUCCESS) {
-					DUG_PRINTF("Recovery failed: USB error %02x\r\n", usb_res);
-					return RES_ERROR;
-				} else {
-					DUG_PRINTF("Recovery successful, continuing...\r\n");
-				}
-			} else {
-				return RES_ERROR;
+			if (usb_res == ERR_SUCCESS) {
+				break; // Success, continue
 			}
-		}
+			
+			// Handle USB errors with delays and occasional endpoint clearing
+			if ((nak_retries % 10) == 9) {
+				uint8_t ep0 = 64; // Default EP0 max packet size
+				USBFSH_ClearEndpStall(ep0, (uint8_t)(0x80 | msc_bulk_in_endp));
+				msc_bulk_in_tog = 0;
+				for (volatile int i = 0; i < 2000; i++); // 2ms delay
+			}
+			
+			for (volatile int i = 0; i < 1000; i++); // 1ms delay between retries
+			nak_retries++;
+			
+			if (nak_retries >= 40) {
+				DUG_PRINTF("Data read failed at packet %d after %d retries: USB error %02x\r\n", 
+				           packet, nak_retries, usb_res);
+				
+				// Try mass storage reset as last resort
+				if (packet == 0) { // Only on first packet failure
+					DUG_PRINTF("Attempting mass storage reset recovery...\r\n");
+					msc_mass_storage_reset();
+					
+					// Reset and try one more time
+					bytes_read = 0;
+					packet = 0;
+					packet_len = 64;
+					usb_res = USBFSH_GetEndpData(msc_bulk_in_endp, &msc_bulk_in_tog, 
+					                             &sector_buffer[bytes_read], &packet_len);
+					if (usb_res == ERR_SUCCESS) {
+						DUG_PRINTF("Mass storage reset recovery successful\r\n");
+						break;
+					} else {
+						DUG_PRINTF("Mass storage reset recovery failed: USB error %02x\r\n", usb_res);
+						return RES_ERROR;
+					}
+				} else {
+					return RES_ERROR;
+				}
+			}
+		} while (usb_res != ERR_SUCCESS);
 		
 		if (packet_len != 64) {
 			DUG_PRINTF("Packet %d length error: expected 64, got %d\r\n", packet, packet_len);

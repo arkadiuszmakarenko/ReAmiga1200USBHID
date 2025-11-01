@@ -200,3 +200,4 @@ driver/*.cat
 *.pkg
 *.deb
 *.rpm
+FATFS
