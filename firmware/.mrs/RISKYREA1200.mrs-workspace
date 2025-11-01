@@ -1,0 +1,34 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "RISKYREA1200",
+			"path": "../RISKYREA1200"
+		},
+		{
+			"name": "RISKYREA1200Boorloader",
+			"path": "../RISKYREA1200Boorloader"
+		},
+		{
+			"name": "Bootloader",
+			"path": "../Bootloader"
+		}
+	],
+	"settings": {
+		"mrs.workspace.type": "solution",
+		"files.associations": {
+			"*.c": "c",
+			"*.h": "cpp",
+			"*.hxx": "cpp",
+			"*.hpp": "cpp",
+			"*.c++": "cpp",
+			"*.cpp": "cpp",
+			"*.cxx": "cpp",
+			"*.cc": "cpp",
+			"*.hh": "cpp",
+			"*.h++": "cpp"
+		}
+	}
+}

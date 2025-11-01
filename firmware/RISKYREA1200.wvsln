@@ -1,0 +1,12 @@
+/home/makaron/Repo/RISKYREA1200/firm/RISKYREA1200/RISKYREA1200.wvsln:
+-arm:${eclipse_home}/toolchain/arm-none-eabi-gcc/bin
+-build:${eclipse_home}/toolchain/Build Tools/bin
+-openocd name:openocd
+-openocd path:${eclipse_home}/toolchain/OpenOCD/bin
+-rv:${eclipse_home}/toolchain/RISC-V Embedded GCC/bin
+/home/makaron/Repo/RISKYREA1200/firmware/RISKYREA1200
+../RISKYREA1200
+/home/makaron/Repo/RISKYREA1200/firmware/RISKYREA1200Boorloader
+../RISKYREA1200Boorloader
+/home/makaron/Repo/RISKYREA1200/firmware/Bootloader
+../Bootloader

@@ -1,0 +1,202 @@
+# ==============================================================================
+# RISKYREA1200 CH32V Firmware Project .gitignore
+# ==============================================================================
+
+# MRS Toolchain - exclude entire toolchain directory
+MRS_Toolchain_Linux_x64_V210/
+
+# ==============================================================================
+# Build Artifacts
+# ==============================================================================
+
+# Object files
+*.o
+*.obj
+*.elf
+*.hex
+*.bin
+*.lst
+*.map
+*.lss
+*.sym
+*.tmp
+
+# Build directories
+build/
+obj/
+**/build/
+**/obj/
+
+# Compiled libraries
+*.lib
+*.a
+
+# Debug files
+*.dwarf
+*.debug
+
+# ==============================================================================
+# IDE and Editor Files
+# ==============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Eclipse CDT
+.metadata
+.cproject
+.project
+.settings/
+
+# IAR
+*.eww
+*.ewd
+*.ewp
+*.dep
+*.d
+debug/
+Debug/
+Release/
+
+# Keil µVision
+*.uvproj
+*.uvopt
+*.uvgui*
+
+# Segger Embedded Studio
+*.emProject
+*.emSession
+
+# ==============================================================================
+# Temporary and Cache Files
+# ==============================================================================
+
+# Backup files
+*~
+*.bak
+*.backup
+*.old
+*.orig
+*.tmp
+
+# Cache files
+*.cache
+**/cache/
+
+# Temporary files
+temp/
+tmp/
+**/temp/
+**/tmp/
+
+# ==============================================================================
+# KiCad PCB Design Files (board directory)
+# ==============================================================================
+
+# KiCad backup files
+*-backups/
+*-cache.lib
+*.bck
+*.kicad_pcb-bak
+*.sch-bak
+
+# KiCad temporary files
+fp-info-cache
+*.net
+*.dsn
+*.ses
+
+# KiCad lock files
+*.lck
+*.lock
+
+# Gerber and drill files (uncomment if you want to version control these)
+# *.gbr
+# *.gbl
+# *.gtl
+# *.gbs
+# *.gts
+# *.gbo
+# *.gto
+# *.drl
+# *.xln
+
+# ==============================================================================
+# System Files
+# ==============================================================================
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Linux
+*~
+.directory
+
+# ==============================================================================
+# Logs and Documentation
+# ==============================================================================
+
+# Log files
+*.log
+*.out
+
+# Documentation build
+doc/
+docs/html/
+docs/latex/
+
+# ==============================================================================
+# Firmware Specific
+# ==============================================================================
+
+# Bootloader specific build artifacts
+firmware/Bootloader/build/
+firmware/Bootloader/obj/
+firmware/CH32V203C8T6/build/
+firmware/CH32V203C8T6/obj/
+firmware/RISKYREA1200/build/
+firmware/RISKYREA1200/obj/
+firmware/RISKYREA1200Boorloader/build/
+firmware/RISKYREA1200Boorloader/obj/
+
+# Makefile dependencies
+*.d
+*.dep
+sources.mk
+objects.mk
+
+# Programming and debug files
+*.jlink
+*.ini
+
+# ==============================================================================
+# USB HID Driver Files
+# ==============================================================================
+
+# Driver installation files
+driver/*.inf
+driver/*.cat
+
+# ==============================================================================
+# Archives and Packages
+# ==============================================================================
+
+# Compressed files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Package files
+*.pkg
+*.deb
+*.rpm
