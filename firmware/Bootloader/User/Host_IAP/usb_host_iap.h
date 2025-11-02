@@ -43,11 +43,10 @@ extern "C" {
 /*******************************************************************************/
 /* Macro Definitions */
 #define DEF_CORE_RV 0x01
-#define DEF_CORE_CM3 0x10
 #define DEF_CORE_TYPE DEF_CORE_RV
 
 /* IAP binary File */
-#define DEF_IAP_FILE_NAME "/RISKYKVM.UPD"
+#define DEF_IAP_FILE_NAME "/RISKYREA.UPD"
 
 /* IAP Status Definitions */
 #define DEF_IAP_SUCCESS 0x00    /* IAP Operation Success */
@@ -60,22 +59,21 @@ extern "C" {
 #define DEF_IAP_ERR_LENGTH 0xF6 /* IAP Operation, Flash data length verify error */
 
 /* IAP Load buffer Definitions */
-#define DEF_MAX_IAP_BUFFER_LEN 1024 /* IAP Load buffer size */
+#define DEF_MAX_IAP_BUFFER_LEN 512 /* IAP Load buffer size - reduced for size optimization */
 
 /* Flash page size */
 #define DEF_FLASH_PAGE_SIZE 0x100 /* Flash Page size, refer to the data-sheet (ch32vf2x_3xRM.pdf) for details */
 
-/* APP CODE ADDR Setting */
-#define DEF_APP_CODE_START_ADDR 0x08008000                                    /* IAP Flash Operation start address, user code start address */
-#ifdef CH32V20x_D6
+/* APP CODE ADDR Setting */                               /* IAP Flash Operation start address, user code start address */
+extern uint32_t _bootloader_limit;                      /* Symbol from linker script defining bootloader end */
+#define FLASH_BASE_ADDR         0x08000000
+#define DEF_APP_CODE_START_ADDR (FLASH_BASE_ADDR + (uint32_t)&_bootloader_limit)
+
+
 #define DEF_APP_CODE_END_ADDR 0x08010000                                      /* IAP Flash Operation end address, user code end address */
                                                                               /* Please refer to link.ld file for accuracy flash size, the size here is the smallest available size */
                                                                               /* CH32V203C8/G8/F8 - 0x08010000 (64K), CH32F203C6 - 0x08008000 (32K) */
-#else
-#define DEF_APP_CODE_END_ADDR 0x08020000                                      /* IAP Flash Operation end address, user code end address */
-/* Please refer to link.ld file for accuracy flash size, the size here is the smallest available size */
-/* CH32V203RB/208x - 0x08020000 (128K) */
-#endif
+
 #define DEF_APP_CODE_MAXLEN (DEF_APP_CODE_END_ADDR - DEF_APP_CODE_START_ADDR) /* IAP Flash Operation size, user code max size */
 
 /* Flash Operation Key Setting */
@@ -91,10 +89,6 @@ extern __attribute__ ((aligned (4))) uint8_t USBHD_TX_Buf[MAX_PACKET_SIZE];  // 
 extern __attribute__ ((aligned (4))) uint8_t USBHD_RX_Buf[MAX_PACKET_SIZE];  // OUT, must even address
 
 /*******************************************************************************/
-/* Data Structures */
-#if DEF_CORE_TYPE == DEF_CORE_CM3
-typedef void (*iapfun) (void);  // Define a function type parameter.
-#endif
 
 /*******************************************************************************/
 /* Function Extrapolation */
@@ -115,7 +109,7 @@ extern void IAP_Main_Deal (void);
 extern void IAP_Initialization (void);
 extern uint8_t IAP_USBH_PreDeal (void);
 extern uint8_t IAP_Get_USB_Status (uint8_t port);
-extern void IAP_Parse_Config_Descriptor(uint8_t usb_port, uint8_t *desc_buf, uint16_t desc_len);
+extern void IAP_Parse_Config_Descriptor (uint8_t usb_port, uint8_t *desc_buf, uint16_t desc_len);
 
 #ifdef __cplusplus
 }

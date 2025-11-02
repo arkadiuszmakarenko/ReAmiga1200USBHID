@@ -43,7 +43,8 @@
 				"post_script_description": "",
 				"excludeResources": [
 					"${project}/Startup/startup_ch32v20x_D8W.S",
-					"${project}/Startup/startup_ch32v20x_D8.S"
+					"${project}/Startup/startup_ch32v20x_D8.S",
+					"${project}/User/Pff/diskio_backup.c"
 				],
 				"optimization": {
 					"level": "size",
@@ -265,7 +266,7 @@
 				},
 				"createFlash": {
 					"enabled": true,
-					"outputFileFormat": "ihex",
+					"outputFileFormat": "ihexAndbinary",
 					"copy_only_section_text": false,
 					"copy_only_section_data": false,
 					"copy_only_sections": [],

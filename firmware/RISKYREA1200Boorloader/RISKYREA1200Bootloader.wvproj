@@ -284,7 +284,7 @@
 				},
 				"createFlash": {
 					"enabled": true,
-					"outputFileFormat": "ihex",
+					"outputFileFormat": "ihexAndbinary",
 					"copy_only_section_text": false,
 					"copy_only_section_data": false,
 					"copy_only_sections": [],

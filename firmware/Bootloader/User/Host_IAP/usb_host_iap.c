@@ -34,10 +34,6 @@ volatile uint8_t pff_disk_status;  // Disk status: 0=not ready, 1=ready, 2=mount
 volatile uint32_t Flash_Operation_Key0;
 volatile uint32_t Flash_Operation_Key1;
 
-#if DEF_CORE_TYPE == DEF_CORE_CM3
-iapfun jump2app;
-#endif
-
 /*********************************************************************
  * @fn      FLASH_ReadByte
  *
@@ -82,7 +78,7 @@ void FLASH_ReadWordAdd (uint32_t address, u32 *buff, uint16_t length) {
     uint16_t i;
 
     for (i = 0; i < length; i++) {
-        buff[i] = *(__IO uint32_t *)address;  // ��ָ����ַ��һ���ֵ�����
+        buff[i] = *(__IO uint32_t *)address;
         address += 4;
     }
 }
@@ -116,10 +112,6 @@ uint8_t IAP_Flash_Read (uint32_t address, uint8_t *buff, uint32_t length) {
             buff[i] = *(__IO uint8_t *)read_addr;  // Read one word of data at the specified address
             read_addr++;
         }
-#if 0
-        DUG_PRINTF("i        %d\n", i);
-        DUG_PRINTF("read_len %d\n", read_len);
-#endif
         if (i != read_len) {
             /* Incorrect read length */
             return 0xFD;
@@ -144,7 +136,6 @@ uint8_t IAP_Flash_Read (uint32_t address, uint8_t *buff, uint32_t length) {
  *          See notes for other errors
  */
 uint8_t mFLASH_ProgramPage_Fast (uint32_t addr, uint32_t *buffer) {
-    /* ����оƬ��flash��������޸Ĵ˴����� */
     FLASH_ProgramPage_Fast (addr, buffer);
     return 0;
 }
@@ -345,21 +336,6 @@ uint32_t IAP_Flash_Program (uint32_t address, uint8_t *buff, uint32_t length) {
     return ret;
 }
 
-
-#if DEF_CORE_TYPE == DEF_CORE_CM3
-/*********************************************************************
- * @fn      MSR_MSP
- *
- * @brief   Set stack top address
- *
- * @return  none
- */
-__asm void MSR_MSP (u32 addr) {
-    MSR MSP, r0  // set Main Stack value
-                 BX r14
-}
-#endif
-
 /*********************************************************************
  * @fn      IAP_Jump_APP
  *
@@ -368,8 +344,18 @@ __asm void MSR_MSP (u32 addr) {
  * @return  none
  */
 void IAP_Jump_APP (void) {
+    /* Best-effort deinit of peripherals we touched */
     DeInitStuff();
-    //  __asm("j _bootloader_limit");
+
+    /* Enable the software interrupt and trigger it */
+    NVIC_EnableIRQ(Software_IRQn);
+    __enable_irq();  // Ensure global interrupts are enabled
+    NVIC_SetPendingIRQ(Software_IRQn);
+    
+    /* Wait for interrupt to fire - it will jump to app */
+    while(1) {
+        __NOP();
+    }
 }
 
 /*********************************************************************
@@ -575,10 +561,10 @@ ENUM_START:
     s = USBFSH_SetUsbConfig (RootHubDev[usb_port].bEp0MaxPks, cfg_val);
     if (s == ERR_SUCCESS) {
         DUG_PRINTF ("OK\n");
-        
+
         /* Parse configuration descriptor to populate HostCtl structure */
-        IAP_Parse_Config_Descriptor(usb_port, Com_Buffer, len);
-        
+        IAP_Parse_Config_Descriptor (usb_port, Com_Buffer, len);
+
     } else {
         /* Determine whether the maximum number of retries has been reached, and retry if not reached */
         DUG_PRINTF ("Err(%02x)\n", s);
@@ -641,9 +627,7 @@ uint8_t IAP_USBH_PreDeal (void) {
  * @return  none
  */
 void IAP_Main_Deal (void) {
-    uint32_t totalcount, t;
     uint16_t i, ret;
-    uint8_t *pCodeStr;
     static uint8_t op_flag = 0;
 
     /* Detect USB Device & Enumeration processing */
@@ -652,17 +636,10 @@ void IAP_Main_Deal (void) {
         /* Wait for uDisk Ready and Mount PFF */
         pff_disk_status = 0;
         for (i = 0; i != 10; i++) {
-            DUG_PRINTF ("Wait Disk Ready...\r\n");
             ret = PFF_Check_And_Mount();
             if (ret == 0) {
-                /* Disk Ready and Mounted */
-                DUG_PRINTF ("Disk Ready and Mounted Code:%02x.\r\n", ret);
-                DUG_PRINTF ("PFF_DiskStatus:%02x\n", pff_disk_status);
                 op_flag = 1;
                 break;
-            } else {
-                DUG_PRINTF ("Not Ready Code :%02x.\r\n", ret);
-                DUG_PRINTF ("PFF_DiskStatus:%02x.\n", pff_disk_status);
             }
             Delay_Ms (50);
         }
@@ -679,19 +656,12 @@ void IAP_Main_Deal (void) {
 
         /* file not found */
         if (pf_res == FR_NO_FILE) {
-            /* list all file and stay in IAP code */
-            DUG_PRINTF ("APP file not Found, Stay In IAP.\r\n");
-
-            // Note: PFF does not support file enumeration like CHRV3
-            // We can only try to open the specific file
-            DUG_PRINTF ("PFF does not support file listing. Looking for: %s\r\n", DEF_IAP_FILE_NAME);
+            DUG_PRINTF ("File not found\r\n");
         }
         /* Found file, start IAP processing */
         else if (pf_res == FR_OK) {
-            DUG_PRINTF ("File Found, Start IAP Process\r\n");
-            /* Read File Size */
             pff_file_size = pff_fs.fsize;
-            DUG_PRINTF ("File size in bytes: %d.\r\n", (int)pff_file_size);
+            DUG_PRINTF ("IAP: %d bytes\r\n", (int)pff_file_size);
 
             /* Make sure the flash operation is correct */
             Flash_Operation_Key0 = DEF_FLASH_OPERATION_KEY_CODE_0;
@@ -701,72 +671,158 @@ void IAP_Main_Deal (void) {
 
             /* Binary file read & iap write in */
             uint32_t totalcount = pff_file_size;
-            while (totalcount) {
-                /* Determine read size */
+            uint32_t total_read = 0;
+
+            while (totalcount > 0) {
+                /* Determine read size - limit to available buffer space and use smaller chunks for USB stability */
                 uint16_t read_size;
-                if (totalcount > DEF_COM_BUF_LEN) {
-                    read_size = DEF_COM_BUF_LEN;
+                uint16_t buffer_space = DEF_MAX_IAP_BUFFER_LEN - IAP_WriteIn_Length;
+                uint16_t max_chunk_size = 512;  // Limit to 512 bytes per read for USB stability
+
+                if (totalcount > buffer_space) {
+                    read_size = buffer_space;
                 } else {
-                    read_size = totalcount;
+                    read_size = (uint16_t)totalcount;
                 }
 
-                /* Read data from file */
-                UINT bytes_read;
-                pf_res = pf_read (Com_Buffer, read_size, &bytes_read);
-                if (pf_res != FR_OK) {
-                    DUG_PRINTF ("File read error: %d\r\n", pf_res);
-                    break;
+                /* Further limit chunk size for USB stability */
+                if (read_size > max_chunk_size) {
+                    read_size = max_chunk_size;
                 }
 
-                totalcount -= bytes_read;
+                /* Read data directly into IAP buffer with retry */
+                UINT bytes_read = 0;
+                uint8_t retry_count = 0;
+                const uint8_t max_retries = 3;
 
-                /* Process read data */
-                for (i = 0; i < bytes_read; i++) {
-                    IAPLoadBuffer[IAP_WriteIn_Length] = Com_Buffer[i];
-                    IAP_WriteIn_Length++;
-                    /* The whole package part of the IAP user file */
-                    if (IAP_WriteIn_Length == DEF_MAX_IAP_BUFFER_LEN) {
-                        /* Write Data In Flash */
-                        ret = IAP_Flash_Program (DEF_APP_CODE_START_ADDR + IAP_Load_Addr_Offset, IAPLoadBuffer, IAP_WriteIn_Length);
-                        if (ret != 0) {
-                            DUG_PRINTF ("Flash program error: %d\r\n", ret);
+                do {
+                    pf_res = pf_read (&IAPLoadBuffer[IAP_WriteIn_Length], read_size, &bytes_read);
+
+                    if (pf_res == FR_OK) {
+                        break;
+                    }
+
+                    if (pf_res == FR_DISK_ERR) {
+                        Delay_Ms (200);
+                        disk_reset_state();
+                        pff_disk_status = 0;
+
+                        uint8_t mount_attempts = 0;
+                        while (mount_attempts < 3) {
+                            ret = PFF_Check_And_Mount();
+                            if (ret == 0) {
+                                pf_res = pf_open (DEF_IAP_FILE_NAME);
+                                if (pf_res == FR_OK) {
+                                    pf_res = pf_lseek (total_read);
+                                    if (pf_res == FR_OK) {
+                                        break;
+                                    }
+                                }
+                            }
+                            mount_attempts++;
+                            Delay_Ms (300);
+                        }
+
+                        if (mount_attempts >= 3) {
                             break;
                         }
-                        IAP_Load_Addr_Offset += DEF_MAX_IAP_BUFFER_LEN;
-                        IAP_WriteIn_Count += IAP_WriteIn_Length;
-                        IAP_WriteIn_Length = 0;
                     }
-                }
 
-                if (bytes_read < read_size)  // End of file reached
-                {
-                    DUG_PRINTF ("\r\nFile End.\r\n");
+                    retry_count++;
+                    if (retry_count < max_retries) {
+                        Delay_Ms (100);
+                    }
+
+                } while (retry_count < max_retries);
+
+                if (pf_res != FR_OK) {
+                    DUG_PRINTF ("Read err: %d\r\n", pf_res);
                     break;
                 }
-            }
 
-            /* Disposal of remaining package length  */
-            if (IAP_WriteIn_Length > 0) {
-                ret = IAP_Flash_Program (DEF_APP_CODE_START_ADDR + IAP_Load_Addr_Offset, IAPLoadBuffer, IAP_WriteIn_Length);
-                if (ret == 0) {
+                if (bytes_read == 0) {
+                    break;
+                }
+
+                /* Add small delay between successful reads to prevent USB overload */
+                if (total_read > 0 && (total_read % (4 * DEF_MAX_IAP_BUFFER_LEN)) == 0) {
+                    Delay_Ms (10);
+                }
+
+                IAP_WriteIn_Length += bytes_read;
+                totalcount -= bytes_read;
+                total_read += bytes_read;
+
+                /* Write buffer when full or at end of file */
+                if (IAP_WriteIn_Length == DEF_MAX_IAP_BUFFER_LEN || totalcount == 0) {
+                    uint32_t write_addr = DEF_APP_CODE_START_ADDR + IAP_Load_Addr_Offset;
+                    
+                    ret = IAP_Flash_Program (write_addr, IAPLoadBuffer, IAP_WriteIn_Length);
+                    if (ret != 0) {
+                        DUG_PRINTF ("Flash err @0x%08X\r\n", (unsigned int)write_addr);
+                        break;
+                    }
+                    IAP_Load_Addr_Offset += IAP_WriteIn_Length;
                     IAP_WriteIn_Count += IAP_WriteIn_Length;
+
+                    IAP_WriteIn_Length = 0;
                 }
             }
 
-            /* Check actual write length and file length */
-            DUG_PRINTF ("\r\nFileSze : %d,%d.\r\n", (int)pff_file_size, IAP_WriteIn_Count);
             if (pff_file_size == IAP_WriteIn_Count) {
-                DUG_PRINTF ("\r\nIAP End.\r\n");
-                blinkLed (10, 500);
-                /* Jump User Application */
-                // IAP_Jump_APP( );
+                DUG_PRINTF ("Verifying...\r\n");
+                
+                /* Re-open file for verification */
+                pf_res = pf_open (DEF_IAP_FILE_NAME);
+                if (pf_res != FR_OK) {
+                    DUG_PRINTF ("Vfy open: %d\r\n", pf_res);
+                    blinkLed (100, 100);
+                } else {
+                    uint32_t vfy_off = 0;
+                    uint32_t vfy_rem = pff_file_size;
+                    uint32_t vfy_err = 0;
+                    
+                    while (vfy_rem > 0 && vfy_err == 0) {
+                        uint16_t chunk = (vfy_rem > DEF_MAX_IAP_BUFFER_LEN) ? 
+                                         DEF_MAX_IAP_BUFFER_LEN : (uint16_t)vfy_rem;
+                        
+                        UINT rd = 0;
+                        pf_res = pf_read (IAPLoadBuffer, chunk, &rd);
+                        if (pf_res != FR_OK || rd != chunk) {
+                            vfy_err = 1;
+                            break;
+                        }
+                        
+                        Flash_Operation_Key1 = DEF_FLASH_OPERATION_KEY_CODE_1;
+                        uint32_t faddr = DEF_APP_CODE_START_ADDR + vfy_off;
+                        for (uint32_t i = 0; i < rd; i++) {
+                            if (FLASH_ReadByte(faddr + i) != IAPLoadBuffer[i]) {
+                                DUG_PRINTF ("Vfy fail @0x%08X\r\n", (unsigned int)(faddr + i));
+                                vfy_err = 1;
+                                break;
+                            }
+                        }
+                        Flash_Operation_Key1 = 0;
+                        
+                        vfy_off += rd;
+                        vfy_rem -= rd;
+                    }
+                    
+                    if (vfy_err) {
+                        DUG_PRINTF ("Vfy FAIL\r\n");
+                        blinkLed (100, 100);
+                    } else {
+                        DUG_PRINTF ("Vfy OK\r\n");
+                        blinkLed (10, 500);
+                        IAP_Jump_APP();
+                    }
+                }
             } else {
-                /* IAP length checksum error */
-                DUG_PRINTF ("IAP length checksum ERR. \r\n");
+                DUG_PRINTF ("Len err\r\n");
                 blinkLed (100, 100);
             }
         } else {
-            DUG_PRINTF ("File open error: %d\r\n", pf_res);
+            DUG_PRINTF ("Open err: %d\r\n", pf_res);
         }
     }
 }
@@ -782,76 +838,75 @@ void IAP_Main_Deal (void) {
  *
  * @return  none
  */
-void IAP_Parse_Config_Descriptor(uint8_t usb_port, uint8_t *desc_buf, uint16_t desc_len)
-{
+void IAP_Parse_Config_Descriptor (uint8_t usb_port, uint8_t *desc_buf, uint16_t desc_len) {
     uint8_t *p = desc_buf;
     uint8_t *end = desc_buf + desc_len;
     uint8_t desc_type, desc_length;
     uint8_t interface_num = 0;
     uint8_t current_interface = 0xFF;
-    
-    DUG_PRINTF("Parsing config descriptor (%d bytes)...\r\n", desc_len);
-    
+
+    DUG_PRINTF ("Parsing config descriptor (%d bytes)...\r\n", desc_len);
+
     // Clear HostCtl structure
-    memset(&HostCtl[usb_port], 0, sizeof(struct __HOST_CTL));
-    
+    memset (&HostCtl[usb_port], 0, sizeof (struct __HOST_CTL));
+
     while (p < end && interface_num < DEF_INTERFACE_NUM_MAX) {
         desc_length = p[0];
         desc_type = p[1];
-        
+
         if (desc_length < 2 || p + desc_length > end) {
-            break; // Invalid descriptor
+            break;  // Invalid descriptor
         }
-        
+
         switch (desc_type) {
-            case USB_DESCR_TYP_INTERF: // Interface descriptor
-                if (desc_length >= 9) {
-                    current_interface = interface_num;
-                    HostCtl[usb_port].Interface[interface_num].Type = p[5]; // bInterfaceClass
-                    DUG_PRINTF("Interface %d: Class=0x%02x, SubClass=0x%02x, Protocol=0x%02x\r\n", 
-                               interface_num, p[5], p[6], p[7]);
-                    interface_num++;
-                }
-                break;
-                
-            case USB_DESCR_TYP_ENDP: // Endpoint descriptor  
-                if (desc_length >= 7 && current_interface < DEF_INTERFACE_NUM_MAX) {
-                    uint8_t ep_addr = p[2];
-                    uint8_t ep_attr = p[3];
-                    uint16_t ep_size = p[4] | (p[5] << 8);
-                    
-                    if ((ep_addr & 0x80) == 0) { // OUT endpoint
-                        uint8_t out_idx = HostCtl[usb_port].Interface[current_interface].OutEndpNum;
-                        if (out_idx < 4) {
-                            HostCtl[usb_port].Interface[current_interface].OutEndpAddr[out_idx] = ep_addr;
-                            HostCtl[usb_port].Interface[current_interface].OutEndpType[out_idx] = ep_attr & 0x03;
-                            HostCtl[usb_port].Interface[current_interface].OutEndpSize[out_idx] = ep_size;
-                            HostCtl[usb_port].Interface[current_interface].OutEndpNum++;
-                            DUG_PRINTF("OUT EP: Addr=0x%02x, Type=%d, Size=%d\r\n", ep_addr, ep_attr & 0x03, ep_size);
-                        }
-                    } else { // IN endpoint
-                        uint8_t in_idx = HostCtl[usb_port].Interface[current_interface].InEndpNum;
-                        if (in_idx < 4) {
-                            HostCtl[usb_port].Interface[current_interface].InEndpAddr[in_idx] = ep_addr;
-                            HostCtl[usb_port].Interface[current_interface].InEndpType[in_idx] = ep_attr & 0x03;
-                            HostCtl[usb_port].Interface[current_interface].InEndpSize[in_idx] = ep_size;
-                            HostCtl[usb_port].Interface[current_interface].InEndpNum++;
-                            DUG_PRINTF("IN EP: Addr=0x%02x, Type=%d, Size=%d\r\n", ep_addr, ep_attr & 0x03, ep_size);
-                        }
+        case USB_DESCR_TYP_INTERF:  // Interface descriptor
+            if (desc_length >= 9) {
+                current_interface = interface_num;
+                HostCtl[usb_port].Interface[interface_num].Type = p[5];  // bInterfaceClass
+                DUG_PRINTF ("Interface %d: Class=0x%02x, SubClass=0x%02x, Protocol=0x%02x\r\n",
+                            interface_num, p[5], p[6], p[7]);
+                interface_num++;
+            }
+            break;
+
+        case USB_DESCR_TYP_ENDP:  // Endpoint descriptor
+            if (desc_length >= 7 && current_interface < DEF_INTERFACE_NUM_MAX) {
+                uint8_t ep_addr = p[2];
+                uint8_t ep_attr = p[3];
+                uint16_t ep_size = p[4] | (p[5] << 8);
+
+                if ((ep_addr & 0x80) == 0) {  // OUT endpoint
+                    uint8_t out_idx = HostCtl[usb_port].Interface[current_interface].OutEndpNum;
+                    if (out_idx < 4) {
+                        HostCtl[usb_port].Interface[current_interface].OutEndpAddr[out_idx] = ep_addr;
+                        HostCtl[usb_port].Interface[current_interface].OutEndpType[out_idx] = ep_attr & 0x03;
+                        HostCtl[usb_port].Interface[current_interface].OutEndpSize[out_idx] = ep_size;
+                        HostCtl[usb_port].Interface[current_interface].OutEndpNum++;
+                        DUG_PRINTF ("OUT EP: Addr=0x%02x, Type=%d, Size=%d\r\n", ep_addr, ep_attr & 0x03, ep_size);
+                    }
+                } else {  // IN endpoint
+                    uint8_t in_idx = HostCtl[usb_port].Interface[current_interface].InEndpNum;
+                    if (in_idx < 4) {
+                        HostCtl[usb_port].Interface[current_interface].InEndpAddr[in_idx] = ep_addr;
+                        HostCtl[usb_port].Interface[current_interface].InEndpType[in_idx] = ep_attr & 0x03;
+                        HostCtl[usb_port].Interface[current_interface].InEndpSize[in_idx] = ep_size;
+                        HostCtl[usb_port].Interface[current_interface].InEndpNum++;
+                        DUG_PRINTF ("IN EP: Addr=0x%02x, Type=%d, Size=%d\r\n", ep_addr, ep_attr & 0x03, ep_size);
                     }
                 }
-                break;
-                
-            default:
-                // Skip other descriptor types
-                break;
+            }
+            break;
+
+        default:
+            // Skip other descriptor types
+            break;
         }
-        
+
         p += desc_length;
     }
-    
+
     HostCtl[usb_port].InterfaceNum = interface_num;
-    DUG_PRINTF("Found %d interfaces\r\n", interface_num);
+    DUG_PRINTF ("Found %d interfaces\r\n", interface_num);
 }
 
 /*********************************************************************
@@ -863,8 +918,7 @@ void IAP_Parse_Config_Descriptor(uint8_t usb_port, uint8_t *desc_buf, uint16_t d
  *
  * @return  USB device status
  */
-uint8_t IAP_Get_USB_Status (uint8_t port)
-{
+uint8_t IAP_Get_USB_Status (uint8_t port) {
     if (port >= DEF_TOTAL_ROOT_HUB) {
         return 0;  // Invalid port
     }

@@ -5,9 +5,9 @@ void blinkLed(int number,int delayms)
     int i;
 
     for (i = 0; i < number; i++) {
-        GPIO_WriteBit(GPIOC, GPIO_Pin_14, Bit_RESET);
+        GPIO_WriteBit(GPIOB, GPIO_Pin_10, Bit_RESET);
         Delay_Ms(delayms);
-        GPIO_WriteBit(GPIOC, GPIO_Pin_14, Bit_SET);
+        GPIO_WriteBit(GPIOB, GPIO_Pin_10, Bit_SET);
         Delay_Ms(delayms);
     }
 }

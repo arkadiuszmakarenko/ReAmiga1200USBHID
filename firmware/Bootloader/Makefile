@@ -61,29 +61,37 @@ GDB := riscv64-unknown-elf-gdb
 READELF := riscv64-unknown-elf-readelf
 endif
 
-# Compiler flags
+# Compiler flags - aggressively optimized for minimum flash size
 CFLAGS = -march=rv32imac_zicsr \
          -mabi=ilp32 \
-         -msmall-data-limit=8 \
+         -msmall-data-limit=0 \
          -msave-restore \
          -fmax-errors=20 \
          -Os \
+         -flto \
          -fmessage-length=0 \
          -fsigned-char \
          -ffunction-sections \
          -fdata-sections \
          -fno-common \
+         -fno-builtin \
+         -fno-unwind-tables \
+         -fno-asynchronous-unwind-tables \
+         -fno-stack-protector \
+         -fmerge-all-constants \
+         -fno-inline-functions-called-once \
+         -fno-tree-loop-optimize \
+         -fno-jump-tables \
          -Wunused \
          -Wuninitialized \
-         -g \
          -std=gnu99 \
          -MMD \
          -MP
 
-# Assembler flags
+# Assembler flags - optimized for minimum size
 ASFLAGS = -march=rv32imac_zicsr \
           -mabi=ilp32 \
-          -msmall-data-limit=8 \
+          -msmall-data-limit=0 \
           -msave-restore \
           -fmax-errors=20 \
           -Os \
@@ -94,32 +102,38 @@ ASFLAGS = -march=rv32imac_zicsr \
           -fno-common \
           -Wunused \
           -Wuninitialized \
-          -g \
           -x assembler-with-cpp \
           -IStartup \
           -MMD \
           -MP
 
-# Linker flags
+# Linker flags - aggressively optimized for minimum flash size
 LDFLAGS = -march=rv32imac_zicsr \
           -mabi=ilp32 \
-          -msmall-data-limit=8 \
+          -msmall-data-limit=0 \
           -msave-restore \
           -fmax-errors=20 \
           -Os \
+          -flto \
           -fmessage-length=0 \
           -fsigned-char \
           -ffunction-sections \
           -fdata-sections \
           -fno-common \
+          -fno-builtin \
+          -fno-unwind-tables \
+          -fno-asynchronous-unwind-tables \
+          -fno-stack-protector \
+          -fmerge-all-constants \
           -Wunused \
           -Wuninitialized \
-          -g \
           -TLd/Link.ld \
           -nostartfiles \
           -Xlinker --gc-sections \
           -Xlinker --print-memory-usage \
           -Wl,-Map,$(BUILD_DIR)/$(PROJECT).map \
+          -Wl,--relax \
+          -Wl,--strip-all \
           --specs=nano.specs \
           --specs=nosys.specs
 
@@ -211,7 +225,7 @@ flash: $(BUILD_DIR)/$(PROJECT).hex
 	@echo "Flashing $(PROJECT).hex to device..."
 	@if [ -f "$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd" ]; then \
 		echo "Using MRS OpenOCD..."; \
-		$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd -f interface/wch-riscv.cfg -f target/wch-riscv.cfg -c "program $(BUILD_DIR)/$(PROJECT).hex verify reset exit"; \
+		cd $(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin && ./openocd -f wch-riscv.cfg -c "program $(shell pwd)/$(BUILD_DIR)/$(PROJECT).hex verify reset exit"; \
 	else \
 		echo "MRS OpenOCD not found. Please configure your programming tool."; \
 		echo "You can flash manually using: $(BUILD_DIR)/$(PROJECT).hex"; \

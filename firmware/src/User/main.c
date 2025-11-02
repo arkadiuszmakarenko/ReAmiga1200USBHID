@@ -38,31 +38,6 @@
 #include "keyboard.h"
 #include "gamepad.h"
 
-void USARTx_CFG (void) {
-    GPIO_InitTypeDef GPIO_InitStructure = {0};
-    USART_InitTypeDef USART_InitStructure = {0};
-
-    RCC_APB2PeriphClockCmd (RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_USART1, ENABLE);
-
-    /* USART2 TX-->A.2   RX-->A.3 */
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-    GPIO_Init (GPIOA, &GPIO_InitStructure);
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-
-    USART_InitStructure.USART_BaudRate = 2400;
-    USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-    USART_InitStructure.USART_StopBits = USART_StopBits_1;
-    USART_InitStructure.USART_Parity = USART_Parity_No;
-    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-    USART_InitStructure.USART_Mode = USART_Mode_Tx | USART_Mode_Rx;
-
-    USART_Init (USART1, &USART_InitStructure);
-    USART_Cmd (USART1, ENABLE);
-}
-
 /*********************************************************************
  * @fn      main
  *
@@ -73,42 +48,28 @@ void USARTx_CFG (void) {
 int main (void) {
     /* Initialize system configuration */
     Delay_Init();
-    // USART_Printf_Init (115200);
-    // DUG_PRINTF ("SystemClk:%d\r\n", SystemCoreClock);
-    // DUG_PRINTF ("USBFS HOST KM Test\r\n");
+    USART_Printf_Init (115200);
+    DUG_PRINTF ("SystemClk:%d\r\n", SystemCoreClock);
+    DUG_PRINTF ("I AM IN\r\n");
+    printf ("I AM IN\r\n");
 
     /* Initialize TIM3 */
     TIM3_Init (9, SystemCoreClock / 10000 - 1);
-    // DUG_PRINTF ("TIM3 Init OK!\r\n");
-    USARTx_CFG();
+    DUG_PRINTF ("TIM3 Init OK!\r\n");
 
     /* Initialize USBFS host */
-#if DEF_USBFS_PORT_EN
-    // DUG_PRINTF ("USBFS Host Init\r\n");
+    DUG_PRINTF ("USBFS Host Init\r\n");
     USBFS_RCC_Init();
     USBFS_Host_Init (ENABLE);
     memset (&RootHubDev.bStatus, 0, sizeof (ROOT_HUB_DEVICE));
     memset (&HostCtl[DEF_USBFS_PORT_INDEX * DEF_ONE_USB_SUP_DEV_TOTAL].InterfaceNum, 0, DEF_ONE_USB_SUP_DEV_TOTAL * sizeof (HOST_CTL));
-#endif
 
     TIM2_Init();
     TIM4_Init();
     GPIO_Config();
-    //  InitMouse();
-
-#if DEF_DEBUG_PRINTF
+    InitMouse();
     DUG_PRINTF ("TIM2,4 Delay, GPIO and Mouse Init OK!\r\n");
-#endif
-
-    uint8_t data = 0;
     while (1) {
-
-
-        USART_SendData (USART1, data);
-        Delay_Ms (100);
-        data++;
-
-
         USBH_MainDeal();
 
         // Handle HID Device

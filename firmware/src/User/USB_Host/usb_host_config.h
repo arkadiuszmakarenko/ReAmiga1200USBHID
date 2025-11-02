@@ -33,7 +33,7 @@ extern "C" {
 
 /******************************************************************************/
 /* Debug Macro Definition */
-#define DEF_DEBUG_PRINTF 0
+#define DEF_DEBUG_PRINTF 1
 #if (DEF_DEBUG_PRINTF == 1)
 #define DUG_PRINTF(format, arg...) printf (format, ##arg)
 #else
