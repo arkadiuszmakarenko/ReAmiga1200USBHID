@@ -1,0 +1,71 @@
+{
+  // VS Code tasks: build Bootloader (Debug) and start OpenOCD from the bundled MRS toolchain
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Bootloader (Debug)",
+      "type": "shell",
+      "command": "make",
+      "args": [
+        "-C",
+        "${workspaceFolder}/firmware/Bootloader",
+        "BUILD_TYPE=Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/firmware/Bootloader"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "OpenOCD (WCH)",
+      "type": "shell",
+      "command": "${workspaceFolder}/MRS_Toolchain_Linux_x64_V210/OpenOCD/OpenOCD/bin/openocd",
+      "args": [
+        "-f",
+        "${workspaceFolder}/MRS_Toolchain_Linux_x64_V210/OpenOCD/OpenOCD/bin/wch-riscv.cfg",
+        "-c",
+        "chip_id CH32V20x"
+      ],
+      "options": {
+        // Keep explicit working dir but don't rely on it for cfg resolution
+        "cwd": "${workspaceFolder}/MRS_Toolchain_Linux_x64_V210/OpenOCD/OpenOCD/bin"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared"
+      },
+      "problemMatcher": {
+        // Mark task ready when OpenOCD starts listening for GDB
+        "owner": "openocd",
+        "pattern": [
+          {
+            "regexp": ".*",
+            "file": 1,
+            "location": 2,
+            "message": 0
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Open On-Chip Debugger.*",
+          "endsPattern": ".*(Ready for Remote Connections|Listening on port 3333).*"
+        }
+      }
+    },
+    {
+      "label": "Debug: Build then OpenOCD",
+      "dependsOn": [
+        "Build Bootloader (Debug)",
+        "OpenOCD (WCH)"
+      ],
+      "dependsOrder": "sequence"
+    }
+  ]
+}

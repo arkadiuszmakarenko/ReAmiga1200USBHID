@@ -46,8 +46,8 @@ void HardFault_Handler (void) {
  * @return  none
  */
 void SW_Handler (void) {
-    __asm("li  a0, 0x02000");
-    __asm("jr  a0");
+    __asm ("li  a0, 0x03000");
+    __asm ("jr  a0");
 
-    while(1);
+    while (1);
 }

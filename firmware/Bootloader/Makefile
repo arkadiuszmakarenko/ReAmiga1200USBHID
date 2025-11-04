@@ -1,11 +1,23 @@
 # Independent Makefile for CH32V20x Bootloader
 # All build artifacts will be placed in the /build directory
 
+#############################
+# Project configuration
+#############################
+
 # Project name
 PROJECT = Bootloader
 
-# Build directory
+# Build type: Release (size-optimized) or Debug (debuggable)
+# Override on CLI: make BUILD_TYPE=Debug
+BUILD_TYPE ?= Release
+
+# Build directory (separate per build type)
+ifeq ($(BUILD_TYPE),Debug)
+BUILD_DIR = build-debug
+else
 BUILD_DIR = build
+endif
 
 # Source directories
 SRC_DIRS = Core Debug Peripheral/src Startup User User/Host_IAP User/Pff User/USB_Host
@@ -61,14 +73,12 @@ GDB := riscv64-unknown-elf-gdb
 READELF := riscv64-unknown-elf-readelf
 endif
 
-# Compiler flags - aggressively optimized for minimum flash size
+# Base compiler flags
 CFLAGS = -march=rv32imac_zicsr \
          -mabi=ilp32 \
          -msmall-data-limit=0 \
          -msave-restore \
          -fmax-errors=20 \
-         -Os \
-         -flto \
          -fmessage-length=0 \
          -fsigned-char \
          -ffunction-sections \
@@ -79,22 +89,18 @@ CFLAGS = -march=rv32imac_zicsr \
          -fno-asynchronous-unwind-tables \
          -fno-stack-protector \
          -fmerge-all-constants \
-         -fno-inline-functions-called-once \
-         -fno-tree-loop-optimize \
-         -fno-jump-tables \
          -Wunused \
          -Wuninitialized \
          -std=gnu99 \
          -MMD \
          -MP
 
-# Assembler flags - optimized for minimum size
+# Assembler flags
 ASFLAGS = -march=rv32imac_zicsr \
           -mabi=ilp32 \
           -msmall-data-limit=0 \
           -msave-restore \
           -fmax-errors=20 \
-          -Os \
           -fmessage-length=0 \
           -fsigned-char \
           -ffunction-sections \
@@ -107,14 +113,12 @@ ASFLAGS = -march=rv32imac_zicsr \
           -MMD \
           -MP
 
-# Linker flags - aggressively optimized for minimum flash size
+# Base linker flags
 LDFLAGS = -march=rv32imac_zicsr \
           -mabi=ilp32 \
           -msmall-data-limit=0 \
           -msave-restore \
           -fmax-errors=20 \
-          -Os \
-          -flto \
           -fmessage-length=0 \
           -fsigned-char \
           -ffunction-sections \
@@ -132,10 +136,36 @@ LDFLAGS = -march=rv32imac_zicsr \
           -Xlinker --gc-sections \
           -Xlinker --print-memory-usage \
           -Wl,-Map,$(BUILD_DIR)/$(PROJECT).map \
-          -Wl,--relax \
-          -Wl,--strip-all \
+					-Wl,--relax \
           --specs=nano.specs \
           --specs=nosys.specs
+
+#############################
+# Optimization and debug per build type
+#############################
+
+ifeq ($(BUILD_TYPE),Debug)
+	# Maximum debugging experience - all debug flags enabled
+	CFLAGS += -Og -g3 -ggdb3 -gdwarf-4 \
+	          -fno-omit-frame-pointer \
+	          -fvar-tracking \
+	          -fvar-tracking-assignments \
+	          -fno-eliminate-unused-debug-types \
+	          -fno-inline \
+	          -fno-inline-small-functions \
+	          -fno-inline-functions-called-once \
+	          -fdebug-prefix-map=$(shell pwd)=. \
+	          -grecord-gcc-switches
+	ASFLAGS += -g3 -ggdb3 -gdwarf-4
+	LDFLAGS += -g3 -ggdb3
+	# Avoid LTO in debug for clearer stepping and symbols
+	# No strip of symbols
+else
+	# Size-optimized release
+	CFLAGS += -Os -flto -fno-inline-functions-called-once -fno-tree-loop-optimize -fno-jump-tables
+	ASFLAGS += -Os
+	LDFLAGS += -Os -flto -Wl,--strip-all
+endif
 
 # Find all C source files
 C_SOURCES = $(shell find Core Debug Peripheral/src User -name "*.c")
@@ -154,7 +184,7 @@ ASM_DEPS = $(ASM_SOURCES:%.S=$(BUILD_DIR)/%.d)
 ALL_DEPS = $(C_DEPS) $(ASM_DEPS)
 
 # Default target
-all: check-toolchain $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).hex $(BUILD_DIR)/$(PROJECT).lst size
+all: check-toolchain $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).hex $(BUILD_DIR)/$(PROJECT).bin $(BUILD_DIR)/$(PROJECT).lst size
 
 # Check if toolchain is available
 check-toolchain:
@@ -202,6 +232,11 @@ $(BUILD_DIR)/$(PROJECT).lst: $(BUILD_DIR)/$(PROJECT).elf
 	@echo "Creating $@"
 	@"$(OBJDUMP)" --all-headers --demangle --disassemble -M xw "$<" > "$@"
 
+# Rule for creating binary file
+$(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
+	@echo "Creating $@"
+	@"$(OBJCOPY)" -O binary "$<" "$@"
+
 # Show size information
 size: $(BUILD_DIR)/$(PROJECT).elf
 	@echo "Size information:"
@@ -215,11 +250,6 @@ memory-usage: $(BUILD_DIR)/$(PROJECT).elf
 	@echo "Section sizes:"
 	@"$(READELF)" -S "$<" | grep -E '(\.text|\.data|\.bss|\.rodata)'
 
-# Generate binary file for programming
-$(BUILD_DIR)/$(PROJECT).bin: $(BUILD_DIR)/$(PROJECT).elf
-	@echo "Creating $@"
-	@"$(OBJCOPY)" -O binary "$<" "$@"
-
 # Flash target (requires OpenOCD configuration)
 flash: $(BUILD_DIR)/$(PROJECT).hex
 	@echo "Flashing $(PROJECT).hex to device..."
@@ -229,6 +259,17 @@ flash: $(BUILD_DIR)/$(PROJECT).hex
 	else \
 		echo "MRS OpenOCD not found. Please configure your programming tool."; \
 		echo "You can flash manually using: $(BUILD_DIR)/$(PROJECT).hex"; \
+	fi
+
+# Flash binary file (alternative method)
+flash-bin: $(BUILD_DIR)/$(PROJECT).bin
+	@echo "Flashing $(PROJECT).bin to device..."
+	@if [ -f "$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd" ]; then \
+		echo "Using MRS OpenOCD..."; \
+		cd $(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin && ./openocd -f wch-riscv.cfg -c "program $(shell pwd)/$(BUILD_DIR)/$(PROJECT).bin verify reset exit 0x00000000"; \
+	else \
+		echo "MRS OpenOCD not found. Please configure your programming tool."; \
+		echo "You can flash manually using: $(BUILD_DIR)/$(PROJECT).bin"; \
 	fi
 
 # Debug target
@@ -270,9 +311,11 @@ help:
 	@echo "                        Options: 'RISC-V Embedded GCC12' or 'RISC-V Embedded GCC'"
 	@echo "  TOOLCHAIN_PREFIX    - Tool prefix (default: riscv-wch-elf)"
 	@echo "  USE_SYSTEM_TOOLCHAIN=1 - Use system toolchain instead of MRS"
+	@echo "  BUILD_TYPE={Release|Debug} - Select build profile (default: Release)"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make                                    # Use default MRS GCC12 toolchain"
+	@echo "  make                                    # Release build (size-optimized)"
+	@echo "  make BUILD_TYPE=Debug                   # Debug build with symbols"
 	@echo "  make TOOLCHAIN_VERSION='RISC-V Embedded GCC'  # Use older GCC version"
 	@echo "  make USE_SYSTEM_TOOLCHAIN=1            # Use system toolchain"
 	@echo "  make MRS_TOOLCHAIN_ROOT=/custom/path   # Use custom toolchain path"

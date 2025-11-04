@@ -60,7 +60,6 @@ int main (void) {
         }
     } else {
 
-
         IAP_Jump_APP();
     }
 }
