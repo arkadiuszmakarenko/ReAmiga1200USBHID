@@ -1,0 +1,109 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          make \
+          wget \
+          xz-utils \
+          tar
+    
+    - name: Download WCH RISC-V toolchain
+      run: |
+        echo "Downloading WCH RISC-V toolchain V2.10..."
+        # Download from the WCHToolchain repository
+        wget -q --show-progress \
+          https://github.com/arkadiuszmakarenko/WCHToolchain/releases/download/ToolchainV210/MRS_Toolchain_Linux_x64_V210.tar.xz \
+          -O /tmp/toolchain.tar.xz
+        
+        echo "Extracting toolchain to /opt/riscv-toolchain..."
+        sudo mkdir -p /opt/riscv-toolchain
+        sudo tar -xf /tmp/toolchain.tar.xz -C /opt/riscv-toolchain
+        rm /tmp/toolchain.tar.xz
+        
+        echo "Toolchain installation complete."
+    
+    - name: Verify toolchain installation
+      run: |
+        echo "Checking toolchain installation..."
+        TOOLCHAIN_PATH="/opt/riscv-toolchain/RISC-V Embedded GCC12/bin"
+        
+        if [ ! -d "$TOOLCHAIN_PATH" ]; then
+          echo "ERROR: Toolchain directory not found at: $TOOLCHAIN_PATH"
+          echo "Available directories in /opt/riscv-toolchain:"
+          ls -la /opt/riscv-toolchain/
+          exit 1
+        fi
+        
+        if [ ! -f "$TOOLCHAIN_PATH/riscv-wch-elf-gcc" ]; then
+          echo "ERROR: Compiler not found at: $TOOLCHAIN_PATH/riscv-wch-elf-gcc"
+          echo "Available files in toolchain bin directory:"
+          ls -la "$TOOLCHAIN_PATH/"
+          exit 1
+        fi
+        
+        echo "✓ Toolchain directory exists"
+        echo "✓ Compiler found: $TOOLCHAIN_PATH/riscv-wch-elf-gcc"
+        
+        # Check compiler version
+        "$TOOLCHAIN_PATH/riscv-wch-elf-gcc" --version || {
+          echo "ERROR: Compiler execution failed"
+          exit 1
+        }
+        
+        echo "✓ Toolchain verification complete"
+    
+    
+    - name: Create firmwares
+      working-directory: firmware
+      run: |
+        echo "Creating combined release binary (RISKYREA1200Release.bin)..."
+        make MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain
+        
+        # Verify combined binary
+        if [ ! -f "build/RISKYREA1200Release.bin" ]; then
+          echo "ERROR: RISKYREA1200Release.bin not created"
+          exit 1
+        fi
+
+        if [ ! -f "build/RISKYREA.UPD" ]; then
+          echo "ERROR: RISKYREA.UPD not created"
+          exit 1
+        fi
+        
+        echo "✓ Combined release binary created"
+    
+    - name: List build artifacts
+      working-directory: firmware
+      run: |
+        echo "Build artifacts summary:"
+        echo "========================"
+        find build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.elf" -o -name "*.UPD" \) -exec ls -lh {} \;
+    
+
+    - name: Upload combined release binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: RISKYREA1200Release
+        path: firmware/build/RISKYREA1200Release.bin
+        retention-days: 90
