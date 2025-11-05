@@ -38,7 +38,7 @@ jobs:
         
         echo "Extracting toolchain to /opt/riscv-toolchain..."
         sudo mkdir -p /opt/riscv-toolchain
-        sudo tar -xf /tmp/toolchain.tar.xz -C /opt/riscv-toolchain --strip-components=1
+        sudo tar -xf /tmp/toolchain.tar.xz -C /opt/riscv-toolchain
         rm /tmp/toolchain.tar.xz
         
         echo "Toolchain installation complete."
