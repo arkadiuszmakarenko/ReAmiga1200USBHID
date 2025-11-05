@@ -16,7 +16,8 @@ The build workflow runs automatically on:
 ## Build Environment
 
 - **Container**: Ubuntu 22.04
-- **Toolchain**: MounRiver Studio RISC-V toolchain (V1.92)
+- **Toolchain**: WCH RISC-V toolchain V2.10 (Linux only, without IDE)
+- **Toolchain Source**: https://github.com/arkadiuszmakarenko/WCHToolchain/releases/tag/ToolchainV210
 - **Toolchain Path**: `/opt/riscv-toolchain/RISC-V Embedded GCC12/bin`
 - **Build Tool**: GNU Make with parallel execution (`-j$(nproc)`)
 
@@ -26,7 +27,7 @@ The workflow performs the following steps:
 
 1. **Repository Checkout**: Clones the repository code
 2. **Install Dependencies**: Installs system build tools (build-essential, make, wget, xz-utils, tar)
-3. **Download Toolchain**: Downloads MounRiver Studio RISC-V toolchain from GitHub release
+3. **Download Toolchain**: Downloads WCH RISC-V toolchain V2.10 from GitHub release
 4. **Verify Toolchain**: Checks toolchain installation and compiler execution
 5. **Build Projects**: Builds all three firmware variants:
    - Bootloader (Debug build)
@@ -148,7 +149,7 @@ RUN apt-get update && apt-get install -y \
     tar
 
 RUN wget -q \
-  https://github.com/ch32-riscv-ug/MounRiver_Studio_Community_miror/releases/download/V1.92/MRS_Toolchain_Linux_x64_V1.92.tar.xz \
+  https://github.com/arkadiuszmakarenko/WCHToolchain/releases/download/ToolchainV210/MRS_Toolchain_Linux_x64_V210.tar.xz \
   -O /tmp/toolchain.tar.xz && \
   mkdir -p /opt/riscv-toolchain && \
   tar -xf /tmp/toolchain.tar.xz -C /opt/riscv-toolchain --strip-components=1 && \
@@ -188,6 +189,6 @@ Add this badge to your README.md to show the build status:
 
 ## References
 
-- [MounRiver Studio Community Mirror](https://github.com/ch32-riscv-ug/MounRiver_Studio_Community_miror)
+- [WCH RISC-V Toolchain V2.10](https://github.com/arkadiuszmakarenko/WCHToolchain/releases/tag/ToolchainV210)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [WCH CH32V RISC-V MCU Resources](https://github.com/openwch)

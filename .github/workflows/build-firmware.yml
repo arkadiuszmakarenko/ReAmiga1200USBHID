@@ -27,10 +27,10 @@ jobs:
     
     - name: Download WCH RISC-V toolchain
       run: |
-        echo "Downloading MounRiver Studio RISC-V toolchain..."
-        # Download from the MounRiver Studio mirror
+        echo "Downloading WCH RISC-V toolchain V2.10..."
+        # Download from the WCHToolchain repository
         wget -q --show-progress \
-          https://github.com/ch32-riscv-ug/MounRiver_Studio_Community_miror/releases/download/V1.92/MRS_Toolchain_Linux_x64_V1.92.tar.xz \
+          https://github.com/arkadiuszmakarenko/WCHToolchain/releases/download/ToolchainV210/MRS_Toolchain_Linux_x64_V210.tar.xz \
           -O /tmp/toolchain.tar.xz
         
         echo "Extracting toolchain to /opt/riscv-toolchain..."
