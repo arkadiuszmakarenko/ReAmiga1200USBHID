@@ -61,45 +61,31 @@ else
 endif
 
 # Toolchain Configuration
-# Default to MRS toolchain, but allow customization via environment variables
+# Can be overridden via environment or command line for containerized builds
 MRS_TOOLCHAIN_ROOT ?= ../MRS_Toolchain_Linux_x64_V210
-TOOLCHAIN_VERSION ?= RISC-V Embedded GCC12
+TOOLCHAIN_PREFIX ?= riscv-wch-elf
 
-# Auto-detect toolchain prefix based on version
-ifeq ($(TOOLCHAIN_VERSION),RISC-V Embedded GCC12)
-    TOOLCHAIN_PREFIX ?= riscv-wch-elf
-else ifeq ($(TOOLCHAIN_VERSION),RISC-V Embedded GCC)
-    TOOLCHAIN_PREFIX ?= riscv-none-embed
+# Toolchain paths - can specify full path to toolchain bin directory
+# For containers, set TOOLCHAIN_PATH to the bin directory, e.g.:
+#   make TOOLCHAIN_PATH=/opt/riscv/bin/riscv-wch-elf
+ifneq ($(TOOLCHAIN_PATH),)
+    # User provided full toolchain path
+    CC := $(TOOLCHAIN_PATH)-gcc
+    OBJCOPY := $(TOOLCHAIN_PATH)-objcopy
+    OBJDUMP := $(TOOLCHAIN_PATH)-objdump
+    SIZE := $(TOOLCHAIN_PATH)-size
+    GDB := $(TOOLCHAIN_PATH)-gdb
+    READELF := $(TOOLCHAIN_PATH)-readelf
 else
-    TOOLCHAIN_PREFIX ?= riscv-wch-elf
-endif
-
-# Toolchain paths (properly handle spaces in path)
-TOOLCHAIN_BIN_DIR := $(MRS_TOOLCHAIN_ROOT)/$(TOOLCHAIN_VERSION)/bin
-TOOLCHAIN_PATH := $(TOOLCHAIN_BIN_DIR)/$(TOOLCHAIN_PREFIX)
-
-# Toolchain executables
-CC := $(TOOLCHAIN_PATH)-gcc
-CXX := $(TOOLCHAIN_PATH)-g++
-AS := $(TOOLCHAIN_PATH)-as
-OBJCOPY := $(TOOLCHAIN_PATH)-objcopy
-OBJDUMP := $(TOOLCHAIN_PATH)-objdump
-SIZE := $(TOOLCHAIN_PATH)-size
-AR := $(TOOLCHAIN_PATH)-ar
-GDB := $(TOOLCHAIN_PATH)-gdb
-READELF := $(TOOLCHAIN_PATH)-readelf
-
-# Alternative toolchain option - set USE_SYSTEM_TOOLCHAIN=1 to use system toolchain
-ifeq ($(USE_SYSTEM_TOOLCHAIN),1)
-CC := riscv64-unknown-elf-gcc
-CXX := riscv64-unknown-elf-g++
-AS := riscv64-unknown-elf-as
-OBJCOPY := riscv64-unknown-elf-objcopy
-OBJDUMP := riscv64-unknown-elf-objdump
-SIZE := riscv64-unknown-elf-size
-AR := riscv64-unknown-elf-ar
-GDB := riscv64-unknown-elf-gdb
-READELF := riscv64-unknown-elf-readelf
+    # Use MRS toolchain root
+    TOOLCHAIN_BIN_DIR := $(MRS_TOOLCHAIN_ROOT)/RISC-V Embedded GCC12/bin
+    TOOLCHAIN_PATH := $(TOOLCHAIN_BIN_DIR)/$(TOOLCHAIN_PREFIX)
+    CC := $(TOOLCHAIN_PATH)-gcc
+    OBJCOPY := $(TOOLCHAIN_PATH)-objcopy
+    OBJDUMP := $(TOOLCHAIN_PATH)-objdump
+    SIZE := $(TOOLCHAIN_PATH)-size
+    GDB := $(TOOLCHAIN_PATH)-gdb
+    READELF := $(TOOLCHAIN_PATH)-readelf
 endif
 
 # Base compiler flags
@@ -216,8 +202,12 @@ C_DEPS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.d,$(C_SOURCES))
 ASM_DEPS = $(patsubst $(SRC_DIR)/%.S,$(BUILD_DIR)/%.d,$(ASM_SOURCES))
 ALL_DEPS = $(C_DEPS) $(ASM_DEPS)
 
-# Default target
-all: check-toolchain $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).hex $(BUILD_DIR)/$(PROJECT).bin $(BUILD_DIR)/$(PROJECT).lst size post-build
+# Default target - build all three projects in Release mode
+all: all-release
+
+# Build single project (used internally)
+build-single: check-toolchain $(BUILD_DIR)/$(PROJECT).elf $(BUILD_DIR)/$(PROJECT).hex $(BUILD_DIR)/$(PROJECT).bin $(BUILD_DIR)/$(PROJECT).lst size
+	@$(MAKE) post-build
 
 # Check if toolchain is available
 check-toolchain:
@@ -276,29 +266,33 @@ post-build:
 ifeq ($(PROJECT),RISKYREA1200Bootloader)
 	@echo "Creating RISKYREA.UPD for bootloader update..."
 	@cp "$(BUILD_DIR)/$(PROJECT).bin" "$(BUILD_DIR)/RISKYREA.UPD"
+	@cp "$(BUILD_DIR)/$(PROJECT).bin" "build/RISKYREA.UPD"
 	@echo "✓ Created: $(BUILD_DIR)/RISKYREA.UPD"
+	@echo "✓ Created: build/RISKYREA.UPD"
 endif
 
 # Combine bootloader and application into a single release binary
+# This target will build the required binaries if they don't exist
+# Accepts COMBINE_BUILD_TYPE parameter (default: Debug for compatibility)
+COMBINE_BUILD_TYPE ?= Debug
+
 combine-release:
 	@echo "================================"
-	@echo "Creating combined release binary"
+	@echo "Creating combined release binary ($(COMBINE_BUILD_TYPE))"
 	@echo "================================"
-	@if [ ! -f "build/Bootloader/Debug/Bootloader.bin" ]; then \
-		echo "Error: Bootloader binary not found. Build it first:"; \
-		echo "  make PROJECT=Bootloader BUILD_TYPE=Debug"; \
-		exit 1; \
+	@if [ ! -f "build/Bootloader/$(COMBINE_BUILD_TYPE)/Bootloader.bin" ]; then \
+		echo "Building Bootloader ($(COMBINE_BUILD_TYPE))..."; \
+		$(MAKE) build-single PROJECT=Bootloader BUILD_TYPE=$(COMBINE_BUILD_TYPE); \
 	fi
-	@if [ ! -f "build/RISKYREA1200Bootloader/Debug/RISKYREA1200Bootloader.bin" ]; then \
-		echo "Error: RISKYREA1200Bootloader binary not found. Build it first:"; \
-		echo "  make PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Debug"; \
-		exit 1; \
+	@if [ ! -f "build/RISKYREA1200Bootloader/$(COMBINE_BUILD_TYPE)/RISKYREA1200Bootloader.bin" ]; then \
+		echo "Building RISKYREA1200Bootloader ($(COMBINE_BUILD_TYPE))..."; \
+		$(MAKE) build-single PROJECT=RISKYREA1200Bootloader BUILD_TYPE=$(COMBINE_BUILD_TYPE); \
 	fi
 	@echo "Expanding Bootloader.bin to 12KB (0x3000 bytes)..."
-	@dd if=build/Bootloader/Debug/Bootloader.bin of=build/Bootloader_padded.bin bs=1 count=12288 conv=sync 2>/dev/null
+	@dd if=build/Bootloader/$(COMBINE_BUILD_TYPE)/Bootloader.bin of=build/Bootloader_padded.bin bs=1 count=12288 conv=sync 2>/dev/null
 	@truncate -s 12288 build/Bootloader_padded.bin
 	@echo "Expanding RISKYREA1200Bootloader.bin to 52KB (0xD000 bytes)..."
-	@dd if=build/RISKYREA1200Bootloader/Debug/RISKYREA1200Bootloader.bin of=build/App_padded.bin bs=1 count=53248 conv=sync 2>/dev/null
+	@dd if=build/RISKYREA1200Bootloader/$(COMBINE_BUILD_TYPE)/RISKYREA1200Bootloader.bin of=build/App_padded.bin bs=1 count=53248 conv=sync 2>/dev/null
 	@truncate -s 53248 build/App_padded.bin
 	@echo "Combining binaries..."
 	@cat build/Bootloader_padded.bin build/App_padded.bin > build/RISKYREA1200Release.bin
@@ -325,12 +319,11 @@ memory-usage: $(BUILD_DIR)/$(PROJECT).elf
 	@"$(READELF)" -S "$<" | grep -E '(\.text|\.data|\.bss|\.rodata)'
 
 # Flash target - flashes combined release binary (bootloader + application)
-# Uses sudo to access USB device - WCH-Link requires root permissions
 flash: build/RISKYREA1200Release.bin
 	@echo "Flashing RISKYREA1200Release.bin (64KB: Bootloader + Application) to device..."
 	@if [ ! -f "$<" ]; then \
 		echo "Combined binary not found. Building..."; \
-		$(MAKE) release-combined; \
+		$(MAKE) all-release; \
 	fi
 	@if [ -f "$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd" ]; then \
 		echo "Using MRS OpenOCD with sudo (required for USB access)..."; \
@@ -342,91 +335,45 @@ flash: build/RISKYREA1200Release.bin
 		echo "You can flash manually using: $<"; \
 	fi
 
-# Flash binary file (alternative method for individual project binaries)
-flash-bin: $(BUILD_DIR)/$(PROJECT).bin
-	@echo "Flashing $(PROJECT).bin to device..."
-	@if [ -f "$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd" ]; then \
-		echo "Using MRS OpenOCD..."; \
-		cd $(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin && ./openocd -f wch-riscv.cfg -c "program $(shell pwd)/$(BUILD_DIR)/$(PROJECT).bin verify reset exit 0x00000000"; \
-	else \
-		echo "MRS OpenOCD not found. Please configure your programming tool."; \
-		echo "You can flash manually using: $(BUILD_DIR)/$(PROJECT).bin"; \
-	fi
-
 # Erase chip - full flash erase
 erase:
 	@echo "Erasing entire flash chip..."
-	@if [ -f "$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd" ]; then \
-		echo "Using MRS OpenOCD with sudo..."; \
-		sudo $(shell pwd)/$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd \
-			-f $(shell pwd)/$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/wch-riscv.cfg \
-			-c "init" \
-			-c "halt" \
-			-c "flash erase_sector 0 0 last" \
-			-c "reset" \
-			-c "shutdown"; \
-	else \
-		echo "MRS OpenOCD not found. Please configure your programming tool."; \
-	fi
+	@sudo $(shell pwd)/$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd \
+		-f $(shell pwd)/$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/wch-riscv.cfg \
+		-c "init" \
+		-c "halt" \
+		-c "flash erase_sector 0 0 last" \
+		-c "reset" \
+		-c "shutdown"
 
 # Debug target
 debug: $(BUILD_DIR)/$(PROJECT).elf
-	@echo "Starting GDB debug session..."
-	@echo "Connect to target first, then run: target remote localhost:3333"
 	@"$(GDB)" "$<"
 
-# Clean build artifacts for current project
+# Clean all build artifacts
 clean:
-	@echo "Cleaning $(PROJECT) $(BUILD_TYPE) build directory..."
-	@rm -rf $(BUILD_DIR)
-
-# Clean all build artifacts (all projects and build types)
-clean-all:
-	@echo "Cleaning all build directories..."
+	@echo "Cleaning all build artifacts..."
 	@rm -rf build
+	@echo "✓ Cleaned everything"
 
-# Create build directory structure
-dirs:
-	@mkdir -p $(BUILD_DIR)
-	@mkdir -p $(addprefix $(BUILD_DIR)/,$(SRC_SUBDIRS))
-
-# Build both project variants
-both: both-release
+# Alias for clean (backward compatibility)
+clean-all: clean
 
 # Build all three variants in Release mode
 all-release:
 	@echo "Building all project variants in Release mode..."
-	@$(MAKE) PROJECT=Bootloader BUILD_TYPE=Release
-	@$(MAKE) PROJECT=RISKYREA1200 BUILD_TYPE=Release
-	@$(MAKE) PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Release
-	@$(MAKE) combine-release
+	@$(MAKE) build-single PROJECT=Bootloader BUILD_TYPE=Release
+	@$(MAKE) build-single PROJECT=RISKYREA1200 BUILD_TYPE=Release
+	@$(MAKE) build-single PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Release
+	@$(MAKE) combine-release COMBINE_BUILD_TYPE=Release
 
 # Build all three variants in Debug mode
 all-debug:
 	@echo "Building all project variants in Debug mode..."
-	@$(MAKE) PROJECT=Bootloader BUILD_TYPE=Debug
-	@$(MAKE) PROJECT=RISKYREA1200 BUILD_TYPE=Debug
-	@$(MAKE) PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Debug
-	@$(MAKE) combine-release
-
-# Build combined release binary (bootloader + application)
-release-combined: 
-	@echo "Building combined release binary..."
-	@$(MAKE) PROJECT=Bootloader BUILD_TYPE=Debug
-	@$(MAKE) PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Debug
-	@$(MAKE) combine-release
-
-# Build both main app variants (backward compatibility)
-both-release:
-	@echo "Building both main application variants in Release mode..."
-	@$(MAKE) PROJECT=RISKYREA1200 BUILD_TYPE=Release
-	@$(MAKE) PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Release
-
-# Build both main app variants in Debug mode (backward compatibility)
-both-debug:
-	@echo "Building both main application variants in Debug mode..."
-	@$(MAKE) PROJECT=RISKYREA1200 BUILD_TYPE=Debug
-	@$(MAKE) PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Debug
+	@$(MAKE) build-single PROJECT=Bootloader BUILD_TYPE=Debug
+	@$(MAKE) build-single PROJECT=RISKYREA1200 BUILD_TYPE=Debug
+	@$(MAKE) build-single PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Debug
+	@$(MAKE) combine-release COMBINE_BUILD_TYPE=Debug
 
 # Show help
 help:
@@ -434,24 +381,18 @@ help:
 	@echo "=============================="
 	@echo ""
 	@echo "Available targets:"
-	@echo "  all              - Build the selected project (default)"
-	@echo "  clean            - Remove build artifacts for current project/build type"
-	@echo "  clean-all        - Remove all build artifacts (all projects)"
-	@echo "  dirs             - Create build directory structure"
+	@echo "  all              - Build all three variants in Release mode (default)"
+	@echo "  all-release      - Build all three variants in Release mode"
+	@echo "  all-debug        - Build all three variants in Debug mode"
+	@echo "  build-single     - Build single selected project (use PROJECT= and BUILD_TYPE=)"
+	@echo "  combine-release  - Combine Bootloader + RISKYREA1200Bootloader binaries"
+	@echo "  flash            - Flash combined release binary to device"
+	@echo "  erase            - Erase entire flash chip"
+	@echo "  clean            - Remove all build artifacts"
 	@echo "  size             - Show size information for the ELF file"
 	@echo "  memory-usage     - Show detailed memory usage breakdown"
-	@echo "  flash            - Flash combined release binary to device (requires OpenOCD)"
-	@echo "  erase            - Erase entire flash chip (requires OpenOCD)"
 	@echo "  debug            - Start GDB debug session"
-	@echo "  both             - Build both main app variants (Release)"
-	@echo "  both-release     - Build RISKYREA1200 + RISKYREA1200Bootloader (Release)"
-	@echo "  both-debug       - Build RISKYREA1200 + RISKYREA1200Bootloader (Debug)"
-	@echo "  all-release      - Build all three variants (Bootloader + apps, Release)"
-	@echo "  all-debug        - Build all three variants (Bootloader + apps, Debug)"
-	@echo "  release-combined - Build Bootloader + RISKYREA1200Bootloader and combine into single binary"
-	@echo "  combine-release  - Combine existing Bootloader + RISKYREA1200Bootloader binaries"
 	@echo "  toolchain-info   - Show current toolchain configuration"
-	@echo "  toolchain-env    - Show environment setup for terminal usage"
 	@echo "  help             - Show this help message"
 	@echo ""
 	@echo "Project Selection:"
@@ -463,27 +404,24 @@ help:
 	@echo "  BUILD_TYPE=Release  - Size-optimized build (default)"
 	@echo "  BUILD_TYPE=Debug    - Debug build with full symbols"
 	@echo ""
-	@echo "Toolchain Customization:"
-	@echo "  MRS_TOOLCHAIN_ROOT  - Path to MRS toolchain (default: ../MRS_Toolchain_Linux_x64_V210)"
-	@echo "  TOOLCHAIN_VERSION   - Toolchain version (default: RISC-V Embedded GCC12)"
-	@echo "                        Options: 'RISC-V Embedded GCC12' or 'RISC-V Embedded GCC'"
-	@echo "  TOOLCHAIN_PREFIX    - Tool prefix (default: riscv-wch-elf)"
-	@echo "  USE_SYSTEM_TOOLCHAIN=1 - Use system toolchain instead of MRS"
+	@echo "Toolchain Configuration:"
+	@echo "  MRS_TOOLCHAIN_ROOT=/path/to/toolchain  - Override toolchain root directory"
+	@echo "  TOOLCHAIN_PATH=/path/to/bin/prefix    - Override full toolchain path (for containers)"
+	@echo "  TOOLCHAIN_PREFIX=prefix                - Override toolchain prefix (default: riscv-wch-elf)"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make                                           # Build RISKYREA1200 Release"
+	@echo "  make                                           # Build all three variants in Release"
 	@echo "  make PROJECT=Bootloader BUILD_TYPE=Debug      # Build bootloader Debug"
-	@echo "  make PROJECT=RISKYREA1200Bootloader            # Build bootloader variant Release"
-	@echo "  make PROJECT=RISKYREA1200 BUILD_TYPE=Debug    # Build standalone Debug"
 	@echo "  make all-debug                                 # Build all three variants in Debug"
-	@echo "  make both-debug                                # Build both main apps in Debug"
-	@echo "  make release-combined                          # Build and combine bootloader + app"
-	@echo "  make clean-all                                 # Clean all builds"
+	@echo "  make -j8                                       # Build with parallel compilation"
+	@echo "  make flash                                     # Flash combined binary to device"
+	@echo "  make clean                                     # Clean all builds"
+	@echo ""
+	@echo "Container/Custom Toolchain Examples:"
+	@echo "  make TOOLCHAIN_PATH=/opt/riscv/bin/riscv-wch-elf"
+	@echo "  make MRS_TOOLCHAIN_ROOT=/toolchain"
 	@echo ""
 	@echo "Build artifacts location: build/<PROJECT>/<BUILD_TYPE>/"
-	@echo "  Example: build/Bootloader/Debug/Bootloader.elf"
-	@echo "  Example: build/RISKYREA1200/Debug/RISKYREA1200.elf"
-	@echo "  Example: build/RISKYREA1200Bootloader/Release/RISKYREA1200Bootloader.hex"
 
 # Include dependency files if they exist
 -include $(ALL_DEPS)
@@ -493,16 +431,12 @@ toolchain-info:
 	@echo "Toolchain Configuration:"
 	@echo "========================"
 	@echo "MRS_TOOLCHAIN_ROOT: $(MRS_TOOLCHAIN_ROOT)"
-	@echo "TOOLCHAIN_VERSION:  $(TOOLCHAIN_VERSION)"
 	@echo "TOOLCHAIN_PREFIX:   $(TOOLCHAIN_PREFIX)"
 	@echo "TOOLCHAIN_BIN_DIR:  $(TOOLCHAIN_BIN_DIR)"
-	@echo "USE_SYSTEM_TOOLCHAIN: $(USE_SYSTEM_TOOLCHAIN)"
 	@echo ""
 	@echo "Active Tools:"
 	@echo "CC:      $(CC)"
-	@echo "CXX:     $(CXX)"
 	@echo "OBJCOPY: $(OBJCOPY)"
-	@echo "OBJDUMP: $(OBJDUMP)"
 	@echo "SIZE:    $(SIZE)"
 	@echo "GDB:     $(GDB)"
 	@echo ""
@@ -515,33 +449,6 @@ toolchain-info:
 		echo "  Please check your toolchain configuration"; \
 	fi
 
-# Show environment setup for using the toolchain in terminal
-toolchain-env:
-	@echo "Environment setup for using MRS toolchain in terminal:"
-	@echo "======================================================"
-	@echo ""
-	@echo "Add this to your PATH to use the toolchain directly:"
-	@echo "export PATH=\"$(shell pwd)/$(TOOLCHAIN_BIN_DIR):\$$PATH\""
-	@echo ""
-	@echo "Or run this command in your current shell:"
-	@echo "PATH=\"$(shell pwd)/$(TOOLCHAIN_BIN_DIR):\$$PATH\""
-	@echo ""
-	@echo "Then you can use commands like:"
-	@echo "  $(TOOLCHAIN_PREFIX)-gcc --version"
-	@echo "  $(TOOLCHAIN_PREFIX)-objdump --help"
-
 # Phony targets
-.PHONY: all clean clean-all dirs size memory-usage flash flash-bin erase debug help toolchain-info toolchain-env \
-        check-toolchain both both-release both-debug all-release all-debug post-build \
-        combine-release release-combined
-
-# Print variables for debugging
-debug-vars:
-	@echo "PROJECT: $(PROJECT)"
-	@echo "BUILD_TYPE: $(BUILD_TYPE)"
-	@echo "BUILD_DIR: $(BUILD_DIR)"
-	@echo "LINKER_SCRIPT: $(LINKER_SCRIPT)"
-	@echo "C_SOURCES: $(C_SOURCES)"
-	@echo "ASM_SOURCES: $(ASM_SOURCES)"
-	@echo "C_OBJECTS: $(C_OBJECTS)"
-	@echo "ASM_OBJECTS: $(ASM_OBJECTS)"
+.PHONY: all build-single clean clean-all size memory-usage flash erase debug help toolchain-info \
+        check-toolchain all-release all-debug post-build combine-release
