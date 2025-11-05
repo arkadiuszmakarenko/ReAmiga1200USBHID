@@ -73,68 +73,24 @@ jobs:
         
         echo "✓ Toolchain verification complete"
     
-    - name: Build Bootloader (Debug)
-      working-directory: firmware
-      run: |
-        echo "Building Bootloader (Debug)..."
-        make PROJECT=Bootloader BUILD_TYPE=Debug \
-          MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain \
-          -j$(nproc)
-        
-        # Verify build output
-        if [ ! -f "build/Bootloader/Debug/Bootloader.bin" ]; then
-          echo "ERROR: Bootloader.bin not created"
-          exit 1
-        fi
-        echo "✓ Bootloader (Debug) build complete"
     
-    - name: Build RISKYREA1200 (Release)
-      working-directory: firmware
-      run: |
-        echo "Building RISKYREA1200 (Release)..."
-        make PROJECT=RISKYREA1200 BUILD_TYPE=Release \
-          MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain \
-          -j$(nproc)
-        
-        # Verify build output
-        if [ ! -f "build/RISKYREA1200/Release/RISKYREA1200.bin" ]; then
-          echo "ERROR: RISKYREA1200.bin not created"
-          exit 1
-        fi
-        echo "✓ RISKYREA1200 (Release) build complete"
-    
-    - name: Build RISKYREA1200Bootloader (Debug)
-      working-directory: firmware
-      run: |
-        echo "Building RISKYREA1200Bootloader (Debug)..."
-        make PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Debug \
-          MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain \
-          -j$(nproc)
-        
-        # Verify build output
-        if [ ! -f "build/RISKYREA1200Bootloader/Debug/RISKYREA1200Bootloader.bin" ]; then
-          echo "ERROR: RISKYREA1200Bootloader.bin not created"
-          exit 1
-        fi
-        
-        if [ ! -f "build/RISKYREA1200Bootloader/Debug/RISKYREA.UPD" ]; then
-          echo "ERROR: RISKYREA.UPD not created"
-          exit 1
-        fi
-        echo "✓ RISKYREA1200Bootloader (Debug) build complete"
-    
-    - name: Create combined release binary
+    - name: Create firmwares
       working-directory: firmware
       run: |
         echo "Creating combined release binary (RISKYREA1200Release.bin)..."
-        make combine-release \
-          MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain
+        make MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain
         
         # Verify combined binary
         if [ ! -f "build/RISKYREA1200Release.bin" ]; then
           echo "ERROR: RISKYREA1200Release.bin not created"
           exit 1
         fi
+
+        if [ ! -f "build/RISKYREA.UPD" ]; then
+          echo "ERROR: RISKYREA.UPD not created"
+          exit 1
+        fi
+        
         echo "✓ Combined release binary created"
     
     - name: List build artifacts
@@ -144,40 +100,10 @@ jobs:
         echo "========================"
         find build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.elf" -o -name "*.UPD" \) -exec ls -lh {} \;
     
-    - name: Upload Bootloader artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: Bootloader-Debug
-        path: |
-          firmware/build/Bootloader/Debug/*.bin
-          firmware/build/Bootloader/Debug/*.hex
-          firmware/build/Bootloader/Debug/*.elf
-        retention-days: 90
-    
-    - name: Upload RISKYREA1200 artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: RISKYREA1200-Release
-        path: |
-          firmware/build/RISKYREA1200/Release/*.bin
-          firmware/build/RISKYREA1200/Release/*.hex
-          firmware/build/RISKYREA1200/Release/*.elf
-        retention-days: 90
-    
-    - name: Upload RISKYREA1200Bootloader artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: RISKYREA1200Bootloader-Debug
-        path: |
-          firmware/build/RISKYREA1200Bootloader/Debug/*.bin
-          firmware/build/RISKYREA1200Bootloader/Debug/*.hex
-          firmware/build/RISKYREA1200Bootloader/Debug/*.elf
-          firmware/build/RISKYREA1200Bootloader/Debug/RISKYREA.UPD
-        retention-days: 90
-    
+
     - name: Upload combined release binary
       uses: actions/upload-artifact@v4
       with:
-        name: RISKYREA1200Release-Combined
+        name: RISKYREA1200Release
         path: firmware/build/RISKYREA1200Release.bin
         retention-days: 90
