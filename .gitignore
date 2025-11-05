@@ -54,8 +54,6 @@ obj/
 *.ewp
 *.dep
 *.d
-debug/
-Debug/
 Release/
 
 # Keil µVision
