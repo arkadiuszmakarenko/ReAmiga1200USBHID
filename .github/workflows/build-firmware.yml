@@ -1,0 +1,180 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          make \
+          wget \
+          xz-utils \
+          tar
+    
+    - name: Download WCH RISC-V toolchain
+      run: |
+        echo "Downloading MounRiver Studio RISC-V toolchain..."
+        # Download from the MounRiver Studio mirror
+        wget -q --show-progress \
+          https://github.com/ch32-riscv-ug/MounRiver_Studio_Community_miror/releases/download/V1.92/MRS_Toolchain_Linux_x64_V1.92.tar.xz \
+          -O /tmp/toolchain.tar.xz
+        
+        echo "Extracting toolchain to /opt/riscv-toolchain..."
+        sudo mkdir -p /opt/riscv-toolchain
+        sudo tar -xf /tmp/toolchain.tar.xz -C /opt/riscv-toolchain --strip-components=1
+        rm /tmp/toolchain.tar.xz
+        
+        echo "Toolchain installation complete."
+    
+    - name: Verify toolchain installation
+      run: |
+        echo "Checking toolchain installation..."
+        TOOLCHAIN_PATH="/opt/riscv-toolchain/RISC-V Embedded GCC12/bin"
+        
+        if [ ! -d "$TOOLCHAIN_PATH" ]; then
+          echo "ERROR: Toolchain directory not found at: $TOOLCHAIN_PATH"
+          echo "Available directories in /opt/riscv-toolchain:"
+          ls -la /opt/riscv-toolchain/
+          exit 1
+        fi
+        
+        if [ ! -f "$TOOLCHAIN_PATH/riscv-wch-elf-gcc" ]; then
+          echo "ERROR: Compiler not found at: $TOOLCHAIN_PATH/riscv-wch-elf-gcc"
+          echo "Available files in toolchain bin directory:"
+          ls -la "$TOOLCHAIN_PATH/"
+          exit 1
+        fi
+        
+        echo "✓ Toolchain directory exists"
+        echo "✓ Compiler found: $TOOLCHAIN_PATH/riscv-wch-elf-gcc"
+        
+        # Check compiler version
+        "$TOOLCHAIN_PATH/riscv-wch-elf-gcc" --version || {
+          echo "ERROR: Compiler execution failed"
+          exit 1
+        }
+        
+        echo "✓ Toolchain verification complete"
+    
+    - name: Build Bootloader (Debug)
+      working-directory: firmware
+      run: |
+        echo "Building Bootloader (Debug)..."
+        make PROJECT=Bootloader BUILD_TYPE=Debug \
+          MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain \
+          -j$(nproc)
+        
+        # Verify build output
+        if [ ! -f "build/Bootloader/Debug/Bootloader.bin" ]; then
+          echo "ERROR: Bootloader.bin not created"
+          exit 1
+        fi
+        echo "✓ Bootloader (Debug) build complete"
+    
+    - name: Build RISKYREA1200 (Release)
+      working-directory: firmware
+      run: |
+        echo "Building RISKYREA1200 (Release)..."
+        make PROJECT=RISKYREA1200 BUILD_TYPE=Release \
+          MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain \
+          -j$(nproc)
+        
+        # Verify build output
+        if [ ! -f "build/RISKYREA1200/Release/RISKYREA1200.bin" ]; then
+          echo "ERROR: RISKYREA1200.bin not created"
+          exit 1
+        fi
+        echo "✓ RISKYREA1200 (Release) build complete"
+    
+    - name: Build RISKYREA1200Bootloader (Debug)
+      working-directory: firmware
+      run: |
+        echo "Building RISKYREA1200Bootloader (Debug)..."
+        make PROJECT=RISKYREA1200Bootloader BUILD_TYPE=Debug \
+          MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain \
+          -j$(nproc)
+        
+        # Verify build output
+        if [ ! -f "build/RISKYREA1200Bootloader/Debug/RISKYREA1200Bootloader.bin" ]; then
+          echo "ERROR: RISKYREA1200Bootloader.bin not created"
+          exit 1
+        fi
+        
+        if [ ! -f "build/RISKYREA1200Bootloader/Debug/RISKYREA.UPD" ]; then
+          echo "ERROR: RISKYREA.UPD not created"
+          exit 1
+        fi
+        echo "✓ RISKYREA1200Bootloader (Debug) build complete"
+    
+    - name: Create combined release binary
+      working-directory: firmware
+      run: |
+        echo "Creating combined release binary (RISKYREA1200Release.bin)..."
+        make combine-release \
+          MRS_TOOLCHAIN_ROOT=/opt/riscv-toolchain
+        
+        # Verify combined binary
+        if [ ! -f "build/RISKYREA1200Release.bin" ]; then
+          echo "ERROR: RISKYREA1200Release.bin not created"
+          exit 1
+        fi
+        echo "✓ Combined release binary created"
+    
+    - name: List build artifacts
+      working-directory: firmware
+      run: |
+        echo "Build artifacts summary:"
+        echo "========================"
+        find build -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.elf" -o -name "*.UPD" \) -exec ls -lh {} \;
+    
+    - name: Upload Bootloader artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Bootloader-Debug
+        path: |
+          firmware/build/Bootloader/Debug/*.bin
+          firmware/build/Bootloader/Debug/*.hex
+          firmware/build/Bootloader/Debug/*.elf
+        retention-days: 90
+    
+    - name: Upload RISKYREA1200 artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: RISKYREA1200-Release
+        path: |
+          firmware/build/RISKYREA1200/Release/*.bin
+          firmware/build/RISKYREA1200/Release/*.hex
+          firmware/build/RISKYREA1200/Release/*.elf
+        retention-days: 90
+    
+    - name: Upload RISKYREA1200Bootloader artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: RISKYREA1200Bootloader-Debug
+        path: |
+          firmware/build/RISKYREA1200Bootloader/Debug/*.bin
+          firmware/build/RISKYREA1200Bootloader/Debug/*.hex
+          firmware/build/RISKYREA1200Bootloader/Debug/*.elf
+          firmware/build/RISKYREA1200Bootloader/Debug/RISKYREA.UPD
+        retention-days: 90
+    
+    - name: Upload combined release binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: RISKYREA1200Release-Combined
+        path: firmware/build/RISKYREA1200Release.bin
+        retention-days: 90
