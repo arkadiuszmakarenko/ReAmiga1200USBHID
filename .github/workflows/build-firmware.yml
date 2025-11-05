@@ -105,5 +105,10 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: RISKYREA1200Release
-        path: firmware/build/RISKYREA1200Release.bin
+        path: |
+              firmware/build/*.bin
+              firmware/build/*.hex
+              firmware/build/*.elf
+              firmware/build/*.UPD
         retention-days: 90
+
