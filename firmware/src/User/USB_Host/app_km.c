@@ -621,7 +621,7 @@ void KM_AnalyzeHidReportDesc( uint8_t index, uint8_t intf_num )
  */
 uint8_t KM_DealHidReportDesc( uint8_t index, uint8_t ep0_size )
 {
-    uint8_t  s;
+    uint8_t  s = ERR_USB_UNSUPPORT;
     uint8_t  num, num_tmp;
     uint8_t  getrep_cnt;
 #if DEF_DEBUG_PRINTF
@@ -1253,7 +1253,7 @@ uint8_t USBH_EnumHubPortDevice( uint8_t hub_port, uint8_t *paddr, uint8_t *ptype
     uint8_t  s;
     uint8_t  enum_cnt;
     uint16_t len;
-    uint8_t  cfg_val;
+    uint8_t  cfg_val = 0;
 #if DEF_DEBUG_PRINTF
     uint16_t i;
 #endif

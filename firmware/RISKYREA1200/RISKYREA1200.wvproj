@@ -67,7 +67,7 @@
 					"${project}/Startup/startup_ch32v20x_D8.S"
 				],
 				"optimization": {
-					"level": "size",
+					"level": "debug",
 					"message_length": true,
 					"char_is_signed": true,
 					"function_sections": true,
@@ -107,7 +107,7 @@
 					"other_warning_flags": ""
 				},
 				"debugging": {
-					"debug_level": "default",
+					"debug_level": "max",
 					"debug_format": "default",
 					"generate_prof_information": false,
 					"generate_gprof_information": false,
@@ -311,6 +311,7 @@
 					"show_totals": false,
 					"other_flags": ""
 				},
+				"configVariables": [],
 				"riscvTargetProcessor": {
 					"architecture": "rv32i",
 					"multiply_extension": true,
@@ -330,8 +331,7 @@
 					"other_target_flags": ""
 				},
 				"component_toolchain": "${WCH:Toolchain:GCC8}",
-				"name": "obj",
-				"configVariables": []
+				"name": "obj"
 			}
 		]
 	},
@@ -424,8 +424,10 @@
 			"ATTR_BUILD_BEFORE_LAUNCH_ATTR": 2,
 			"GdbServerAllocateConsole": true,
 			"GdbServerAllocateTelnetConsole": false,
+			"SkipDownloadBeforeDebug": false,
 			"StartGdbCLient": true,
-			"UPDATE_THREADLIST_ON_SUSPEND": false
+			"UPDATE_THREADLIST_ON_SUSPEND": false,
+			"DebugInRam": false
 		}
 	}
 }

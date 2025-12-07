@@ -49,51 +49,46 @@ typedef struct {
 } __attribute__((packed)) item_t;
 
 
-int report_is_usable(uint16_t bit_count, uint8_t report_complete, hid_report_t *conf) {
-// hidp_debugf("  - total bit count: %d (%d bytes, %d bits)",
-//	      bit_count, bit_count/8, bit_count%8);
+int report_is_usable(uint16_t bit_count, uint8_t report_complete, hid_report_t *conf)
+{
+	conf->report_size = bit_count / 8;;
 
-  conf->report_size = bit_count/8;
+	if (((conf->type == REPORT_TYPE_JOYSTICK) && ((report_complete & JOYSTICK_COMPLETE) == JOYSTICK_COMPLETE)) ||
+	    ((conf->type == REPORT_TYPE_MOUSE) && ((report_complete & MOUSE_COMPLETE) == MOUSE_COMPLETE)) ||
+	    (conf->type == REPORT_TYPE_KEYBOARD)) {
+		return 1;
+	}
 
-  // check if something useful was detected
-  if( ((conf->type == REPORT_TYPE_JOYSTICK) && ((report_complete & JOYSTICK_COMPLETE) == JOYSTICK_COMPLETE)) ||
-      ((conf->type == REPORT_TYPE_MOUSE)    && ((report_complete & MOUSE_COMPLETE) == MOUSE_COMPLETE)) ||
-      ((conf->type == REPORT_TYPE_KEYBOARD))) {
- //   hidp_debugf("  - report %d is usable", conf->report_id);
-    return 1;
-  }
-
-//  hidp_debugf("  - unusable report %d", conf->report_id);
-  return 0;
+	return 0;
 }
 
 
 
-int parse_report_descriptor(uint8_t *rep, uint16_t rep_size,hid_report_t *conf) {
-  int8_t app_collection = 0;
-  int8_t phys_log_collection = 0;
-  uint8_t skip_collection = 0;
-  int8_t generic_desktop = -1;   // depth at which first gen_desk was found
-  uint8_t collection_depth = 0;
+int parse_report_descriptor(uint8_t *rep, uint16_t rep_size, hid_report_t *conf)
+{
+	int8_t app_collection = 0;
+	int8_t phys_log_collection = 0;
+	uint8_t skip_collection = 0;
+	int8_t generic_desktop = -1;
+	uint8_t collection_depth = 0;
 
-
-  //
-  uint8_t report_size = 0, report_count = 0;
-  uint16_t bit_count = 0, usage_count = 0;
-  uint16_t logical_minimum=0, logical_maximum=0;
+	uint8_t report_size = 0;
+	uint8_t report_count = 0;
+	uint16_t bit_count = 0;
+	uint16_t usage_count = 0;
+	uint16_t logical_minimum = 0;
+	uint16_t logical_maximum = 0;
 
   // mask used to check of all required components have been found, so
   // that e.g. both axes and the button of a joystick are ready to be used
   uint8_t report_complete = 0;
 
-  // joystick/mouse components
-  int8_t axis[2] = { -1, -1};
-  uint8_t btns = 0;
-  int8_t hat = -1;
-  int8_t wheel = -1;
+	int8_t axis[2] = {-1, -1};
+	uint8_t btns = 0;
+	int8_t hat = -1;
+	int8_t wheel = -1;
 
-
-  while(rep_size) {
+	while (rep_size) {
     // extract short item
     uint8_t tag = ((item_t*)rep)->bTag;
     uint8_t type = ((item_t*)rep)->bType;

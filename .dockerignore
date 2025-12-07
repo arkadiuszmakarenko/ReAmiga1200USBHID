@@ -1,0 +1,35 @@
+# Build outputs
+build/
+build-debug/
+obj/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.lst
+*.map
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation (will be copied separately if needed)
+*.md
+!README.md
+
+# Other toolchains
+MRS_Toolchain_*/
+
+# Backup files
+*~
+*.bak
+*.old
+wmk-backups/

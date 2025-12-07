@@ -7,39 +7,59 @@
 #define LED_Pin GPIO_Pin_10
 #define LED_GPIO_Port GPIOB
 
+
+
+
+
+//DB9 definitions
+
+//Right Button
 #define RB_Pin GPIO_Pin_14
 #define RB_GPIO_Port GPIOB
 
+//Middle Button
 // #define MB_Pin GPIO_Pin_3
 // #define MB_GPIO_Port GPIOB
 
+//Left Button
 #define LB_Pin GPIO_Pin_15
 #define LB_GPIO_Port GPIOB
 
 
+//Joystick directions
+//Right
 #define RHQ_Pin GPIO_Pin_4
 #define RHQ_GPIO_Port GPIOB
+//Left
 #define LVQ_Pin GPIO_Pin_5
 #define LVQ_GPIO_Port GPIOB
+//Back Down
 #define BH_Pin GPIO_Pin_8
 #define BH_GPIO_Port GPIOB
+//Forward Up
 #define FV_Pin GPIO_Pin_9
 #define FV_GPIO_Port GPIOB
 
+//Keyboard definitions
+//KDAT and KCLK lines
 #define KBD_DATA_GPIO_Port GPIOA
 #define KBD_DATA_Pin GPIO_Pin_7
 
 #define KBD_CLOCK_GPIO_Port GPIOA
 #define KBD_CLOCK_Pin GPIO_Pin_6
 
+//Keyboard reset line
 #define KB_RESET_GPIO_Port GPIOA
 #define KB_RESET_GPIO_Pin GPIO_Pin_12
 
+//
 #define K0_Pin GPIO_Pin_8
 #define K0_Port GPIOA
 #define K1_Pin GPIO_Pin_11
 #define K1_Port GPIOA
 
+#define IRQ7_Pin GPIO_Pin_15
+#define IRQ7_Port GPIOA
 
 
 

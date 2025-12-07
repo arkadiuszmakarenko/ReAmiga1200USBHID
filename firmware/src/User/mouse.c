@@ -12,7 +12,6 @@ volatile int16_t mouseDistanceY = 0;		// Distance left for mouse to move
 volatile uint8_t xTimerTop = 1;				// X axis timer TOP value
 volatile uint8_t yTimerTop = 1;				// Y axis timer TOP value
 FIFO_Utils_TypeDef ScrollBuffer;
-uint8_t code = 0;
 volatile uint8_t AmigaACK = 0;
 volatile uint8_t previousMMB = 0;
 
@@ -20,17 +19,11 @@ volatile uint8_t previousMMB = 0;
 
 void InitMouse()
 {
-    //Init circular buffer
-    FifoInit(&ScrollBuffer);
-
+	FifoInit(&ScrollBuffer);
 }
 
-uint8_t processMouseMovement(int8_t movementUnits, uint8_t axis, int limitRate,
-		int dpiDivide) {
-
-
-
-
+uint8_t processMouseMovement(int8_t movementUnits, uint8_t axis, int limitRate, int dpiDivide)
+{
 	uint16_t timerTopValue = 0;
 
 	// Set the mouse movement direction and record the movement units
@@ -65,30 +58,35 @@ uint8_t processMouseMovement(int8_t movementUnits, uint8_t axis, int limitRate,
 		else
 			mouseDistanceY += -movementUnits;
 	} else {
-		if (axis == MOUSEX)
+		if (axis == MOUSEX) {
 			mouseDistanceX = 0;
-		else
+		} else {
 			mouseDistanceY = 0;
+		}
 	}
 
 	// Apply the quadrature output buffer limit
 	if (axis == MOUSEX) {
-		if (mouseDistanceX > Q_BUFFERLIMIT)
+		if (mouseDistanceX > Q_BUFFERLIMIT) {
 			mouseDistanceX = Q_BUFFERLIMIT;
+		}
 	} else {
-		if (mouseDistanceY > Q_BUFFERLIMIT)
+		if (mouseDistanceY > Q_BUFFERLIMIT) {
 			mouseDistanceY = Q_BUFFERLIMIT;
+		}
 	}
 
 	// Get the current value of the quadrature output buffer
-	if (axis == MOUSEX)
+	if (axis == MOUSEX) {
 		timerTopValue = mouseDistanceX;
-	else
+	} else {
 		timerTopValue = mouseDistanceY;
+	}
 
 	// Range check the quadrature output buffer
-	if (timerTopValue > 127)
+	if (timerTopValue > 127) {
 		timerTopValue = 127;
+	}
 
 	// Since the USB reports arrive at 100-125 Hz (even if there is only
 	// a small amount of movement, we have to output the quadrature
@@ -141,242 +139,176 @@ uint8_t processMouseMovement(int8_t movementUnits, uint8_t axis, int limitRate,
 		// If the timerTopValue is less than the rate limit, we output
 		// at the maximum allowed rate.  This will cause addition lag that
 		// is handled by the quadrature output buffer limit above.
-		if (timerTopValue < (uint16_t) rateLimit)
+		if (timerTopValue < (uint16_t) rateLimit) {
 			timerTopValue = (uint16_t) rateLimit;
+		}
 	}
 
 	// Return the timer TOP value
 	return (uint8_t) timerTopValue;
 }
 
-void ProcessMouse(HID_MOUSE_Info_TypeDef *mousemap) {
+void ProcessMouse(HID_MOUSE_Info_TypeDef *mousemap)
+{
+	if (mousemap == NULL) {
+		return;
+	}
+
+	if (mousemap->x > 0 && mouseDirectionX == 0) {
+		mouseDistanceX = 0;
+		mouseDirectionX = 1;
+	} else if (mousemap->x < 0 && mouseDirectionX == 1) {
+		mouseDistanceX = 0;
+		mouseDirectionX = 0;
+	}
+
+	if (mousemap->y > 0 && mouseDirectionY == 0) {
+		mouseDistanceY = 0;
+		mouseDirectionY = 1;
+	} else if (mousemap->y < 0 && mouseDirectionY == 1) {
+		mouseDistanceY = 0;
+		mouseDirectionY = 0;
+	}
+
+	xTimerTop = processMouseMovement(mousemap->x, MOUSEX, 0, 0);
+	yTimerTop = processMouseMovement(mousemap->y, MOUSEY, 0, 0);
+
+	GPIO_WriteBit(LB_GPIO_Port, LB_Pin, mousemap->buttons[0] ? Bit_RESET : Bit_SET);
+
+	uint8_t writeBuff = 0;
+	uint8_t numberTics = abs(mousemap->wheel);
+
+	if (previousMMB == 0 && mousemap->buttons[2] == 1) {
+		writeBuff = CODE_MMB_DOWN;
+		FifoWrite(&ScrollBuffer, &writeBuff, 1);
+		previousMMB = 1;
+	}
+
+	if (previousMMB == 1 && mousemap->buttons[2] == 0) {
+		writeBuff = CODE_MMB_UP;
+		FifoWrite(&ScrollBuffer, &writeBuff, 1);
+		FifoWrite(&ScrollBuffer, &writeBuff, 1);
+		previousMMB = 0;
+	}
 
 
-
-	if (mousemap == NULL) return;
-		// +X = Mouse going right
-		// -X = Mouse going left
-		// +Y = Mouse going down
-		// -Y = Mouse going up
-		//
-		// X and Y have a range of -127 to +127
-
-		// If the mouse movement changes direction then disregard any remaining
-		// movement units in the previous direction.
-
-
-
-		if (mousemap->x > 0 && mouseDirectionX == 0) {
-			mouseDistanceX = 0;
-			mouseDirectionX = 1;
-		} else if (mousemap->x < 0 && mouseDirectionX == 1) {
-			mouseDistanceX = 0;
-			mouseDirectionX = 0;
-		} else if (mousemap->y > 0 && mouseDirectionY == 0) {
-			mouseDistanceY = 0;
-			mouseDirectionY = 1;
-		} else if (mousemap->y < 0 && mouseDirectionY == 1) {
-			mouseDistanceY = 0;
-			mouseDirectionY = 0;
+	if (mousemap->wheel != 0) {
+		if (mousemap->wheel > 0) {
+			writeBuff = CODE_WHEEL_UP;
+		} else {
+			writeBuff = CODE_WHEEL_DOWN;
 		}
 
-		// Process mouse X and Y movement -------------------------------------
-
-		xTimerTop = processMouseMovement(mousemap->x, MOUSEX, 0U, 0U);
-		yTimerTop = processMouseMovement(mousemap->y, MOUSEY, 0U, 0U);
-
-		// Process mouse buttons ----------------------------------------------
-
-		GPIO_WriteBit(LB_GPIO_Port, LB_Pin, !(mousemap->buttons[0]));
-
-		uint8_t writeBuff = 0;
-		uint8_t  numberTics = abs(mousemap->wheel);
-		if (previousMMB == 0 && mousemap->buttons[2] == 1)
-		{
-		    writeBuff = CODE_MMB_DOWN;
-		    FifoWrite(&ScrollBuffer,&writeBuff , 1);
-		    previousMMB = 1;
+		for (uint8_t i = 0; i < numberTics; i++) {
+			FifoWrite(&ScrollBuffer, &writeBuff, 1);
 		}
-		if (previousMMB == 1 &&mousemap->buttons[2] == 0) {
-            writeBuff = CODE_MMB_UP;
-            FifoWrite(&ScrollBuffer,&writeBuff , 1);
-            FifoWrite(&ScrollBuffer,&writeBuff , 1);
-            previousMMB = 0;
-	   }
+	}
 
-
-		if (mousemap->wheel !=0)
-		{
-		    if (mousemap->wheel > 0)
-		    {
-		        writeBuff = CODE_WHEEL_UP;
-		        for( uint8_t i = 0; i<numberTics ;i++)
-		        {
-		            FifoWrite(&ScrollBuffer,&writeBuff , 1);
-		        }
-		    }
-		    else {
-		        writeBuff = CODE_WHEEL_DOWN;
-                for( uint8_t i = 0; i<numberTics ;i++)
-                {
-                    FifoWrite(&ScrollBuffer,&writeBuff , 1);
-                }
-            }
-
-		}
-
-		GPIO_WriteBit(RB_GPIO_Port, RB_Pin, !(mousemap->buttons[1]));
+	GPIO_WriteBit(RB_GPIO_Port, RB_Pin, mousemap->buttons[1] ? Bit_RESET : Bit_SET);
 
 }
 
-void ProcessX_IRQ() {
-
-
-
-	// Process X output
+void ProcessX_IRQ()
+{
 	if (mouseDistanceX > 0) {
-		// Set the output pins according to the current phase BH RHQ FV LVQ
+		switch (mouseEncoderPhaseX) {
+			case 0:
+				GPIO_WriteBit(BH_GPIO_Port, BH_Pin, Bit_RESET);
+				break;
+			case 1:
+				GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, Bit_RESET);
+				break;
+			case 2:
+				GPIO_WriteBit(BH_GPIO_Port, BH_Pin, Bit_SET);
+				break;
+			case 3:
+				GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, Bit_SET);
+				break;
+		}
 
-		if (mouseEncoderPhaseX == 0)
-			GPIO_WriteBit(BH_GPIO_Port, BH_Pin, !(1));	// Set X1 to 1
-		if (mouseEncoderPhaseX == 1)
-			GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, !(1));	// Set X2 to 1
-		if (mouseEncoderPhaseX == 2)
-			GPIO_WriteBit(BH_GPIO_Port, BH_Pin, !(0));	// Set X1 to 0
-		if (mouseEncoderPhaseX == 3)
-			GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, !(0));	// Set X2 to 0
+		if (mouseDirectionX == 0) {
+			mouseEncoderPhaseX = (mouseEncoderPhaseX == 0) ? 3 : mouseEncoderPhaseX - 1;
+		} else {
+			mouseEncoderPhaseX = (mouseEncoderPhaseX + 1) & 0x03;
+		}
 
-		// Change phase
-		if (mouseDirectionX == 0)
-			mouseEncoderPhaseX--;
-		else
-			mouseEncoderPhaseX++;
-
-		// Decrement the distance left to move
 		mouseDistanceX--;
-
-		// Range check the phase
-		if ((mouseDirectionX == 1) && (mouseEncoderPhaseX > 3))
-			mouseEncoderPhaseX = 0;
-		if ((mouseDirectionX == 0) && (mouseEncoderPhaseX < 0))
-			mouseEncoderPhaseX = 3;
 	} else {
-		// Reset the phase if the mouse isn't moving
 		mouseEncoderPhaseX = 0;
 	}
 
-	// Set the timer top value for the next interrupt
-	if (xTimerTop == 0) {
-		TIM2->ATRLR = 1;
-	} else {
-		TIM2->ATRLR = xTimerTop;
-	}
-
+	TIM2->ATRLR = (xTimerTop == 0) ? 1 : xTimerTop;
 }
 
-void ProcessY_IRQ() {
-
-
-// Process Y output
+void ProcessY_IRQ()
+{
 	if (mouseDistanceY > 0) {
-		// Set the output pins according to the current phase
-		if (mouseEncoderPhaseY == 3)
-		{
-			GPIO_WriteBit(FV_GPIO_Port, LVQ_Pin, !(0));	// Set Y1 to 0
+		switch (mouseEncoderPhaseY) {
+			case 0:
+				GPIO_WriteBit(LVQ_GPIO_Port, FV_Pin, Bit_RESET);
+				break;
+			case 1:
+				GPIO_WriteBit(FV_GPIO_Port, LVQ_Pin, Bit_RESET);
+				break;
+			case 2:
+				GPIO_WriteBit(LVQ_GPIO_Port, FV_Pin, Bit_SET);
+				break;
+			case 3:
+				GPIO_WriteBit(FV_GPIO_Port, LVQ_Pin, Bit_SET);
+				break;
 		}
-		if (mouseEncoderPhaseY == 2)
-			GPIO_WriteBit(LVQ_GPIO_Port, FV_Pin, !(0));	// Set Y2 to 0
-		if (mouseEncoderPhaseY == 1)
-		{
-			GPIO_WriteBit(FV_GPIO_Port, LVQ_Pin, !(1));	// Set Y1 to 1
+
+		if (mouseDirectionY == 0) {
+			mouseEncoderPhaseY = (mouseEncoderPhaseY == 0) ? 3 : mouseEncoderPhaseY - 1;
+		} else {
+			mouseEncoderPhaseY = (mouseEncoderPhaseY + 1) & 0x03;
 		}
-			if (mouseEncoderPhaseY == 0)
-			GPIO_WriteBit(LVQ_GPIO_Port, FV_Pin, !(1));	// Set Y2 to 1
 
-		// Change phase
-		if (mouseDirectionY == 0)
-			mouseEncoderPhaseY--;
-		else
-			mouseEncoderPhaseY++;
-
-		// Decrement the distance left to move
 		mouseDistanceY--;
-
-		// Range check the phase
-		if ((mouseDirectionY == 1) && (mouseEncoderPhaseY > 3))
-			mouseEncoderPhaseY = 0;
-		if ((mouseDirectionY == 0) && (mouseEncoderPhaseY < 0))
-			mouseEncoderPhaseY = 3;
 	} else {
-		// Reset the phase if the mouse isn't moving
 		mouseEncoderPhaseY = 0;
 	}
 
-// Set the timer top value for the next interrupt
-	if (yTimerTop == 0) {
-		TIM4->ATRLR = 1;
-	} else {
-		TIM4->ATRLR = yTimerTop;
-	}
-
+	TIM4->ATRLR = (yTimerTop == 0) ? 1 : yTimerTop;
 }
-
 
 
 void ProcessScrollIRQ()
 {
+	uint8_t code = 0;
+	uint16_t PortCurrentValue = GPIO_ReadOutputData(GPIOB);
 
-    uint8_t code = 0;
-    uint16_t PortCurrentValue = GPIO_ReadOutputData(GPIOB);
+	FifoRead(&ScrollBuffer, &code, 1);
 
-    FifoRead(&ScrollBuffer, &code, 1);
+	GPIO_WriteBit(RB_GPIO_Port, RB_Pin, 0);
 
-    // if (code == 0) return;
+	if (code == 0) {
+		GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 1);
+		GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin, 1);
+		GPIO_WriteBit(BH_GPIO_Port, BH_Pin, 1);
+		GPIO_WriteBit(FV_GPIO_Port, FV_Pin, 1);
+	} else if (code == CODE_WHEEL_UP) {
+		GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 0);
+		GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin, 0);
+		GPIO_WriteBit(BH_GPIO_Port, BH_Pin, 1);
+		GPIO_WriteBit(FV_GPIO_Port, FV_Pin, 1);
+	} else if (code == CODE_WHEEL_DOWN) {
+		GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 1);
+		GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin, 0);
+		GPIO_WriteBit(BH_GPIO_Port, BH_Pin, 0);
+		GPIO_WriteBit(FV_GPIO_Port, FV_Pin, 1);
+	} else if (code == CODE_MMB_DOWN) {
+		GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 0);
+		GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin, 0);
+		GPIO_WriteBit(BH_GPIO_Port, BH_Pin, 1);
+		GPIO_WriteBit(FV_GPIO_Port, FV_Pin, 0);
+	} else if (code == CODE_MMB_UP) {
+		GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 1);
+		GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin, 0);
+		GPIO_WriteBit(BH_GPIO_Port, BH_Pin, 0);
+		GPIO_WriteBit(FV_GPIO_Port, FV_Pin, 0);
+	}
 
-    GPIO_WriteBit(RB_GPIO_Port, RB_Pin, 0);
-
-    if (code == 0)
-    {
-        GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 1);
-        GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin,1);
-        GPIO_WriteBit(BH_GPIO_Port, BH_Pin,1);
-        GPIO_WriteBit(FV_GPIO_Port,FV_Pin, 1);
-    }
-
-    if (code == CODE_WHEEL_UP)
-    {
-        GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 0);
-        GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin,0);
-        GPIO_WriteBit(BH_GPIO_Port, BH_Pin,1);
-        GPIO_WriteBit(FV_GPIO_Port,FV_Pin, 1);
-    }
-
-    if (code == CODE_WHEEL_DOWN)
-    {
-        GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 1);
-        GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin, 0);
-        GPIO_WriteBit(BH_GPIO_Port, BH_Pin,0);
-        GPIO_WriteBit(FV_GPIO_Port,FV_Pin, 1);
-    }
-
-    if (code == CODE_MMB_DOWN)
-    {
-        GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 0);
-        GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin, 0);
-        GPIO_WriteBit(BH_GPIO_Port, BH_Pin,1);
-        GPIO_WriteBit(FV_GPIO_Port,FV_Pin, 0);
-    }
-
-    if (code == CODE_MMB_UP)
-    {
-        GPIO_WriteBit(RHQ_GPIO_Port, RHQ_Pin, 1);
-        GPIO_WriteBit(LVQ_GPIO_Port, LVQ_Pin, 0);
-        GPIO_WriteBit(BH_GPIO_Port, BH_Pin,0);
-        GPIO_WriteBit(FV_GPIO_Port,FV_Pin, 0);
-    }
-
-   while (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_3) != 1);
-   GPIO_Write(GPIOB,PortCurrentValue);
+	while (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_3) != 1);
+	GPIO_Write(GPIOB, PortCurrentValue);
 }
-
-

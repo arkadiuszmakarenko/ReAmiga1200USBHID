@@ -6,7 +6,7 @@
  * Description        : Main program body.
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
- * Attention: This software (modified or not) and binary are used for
+ * Azftware (modified or not) and binary are used for
  * microcontroller manufactured by Nanjing Qinheng Microelectronics.
  *******************************************************************************/
 
@@ -27,16 +27,12 @@
 
 /*******************************************************************************/
 /* Header File */
-#include <usb_gamepad.h>
-#include <usb_mouse.h>
-#include <usb_keyboard.h>
-#include "usb_host_config.h"
 #include "utils.h"
 #include "tim.h"
 #include "mouse.h"
 #include "gpio.h"
 #include "keyboard.h"
-#include "gamepad.h"
+#include "usb_device_handler.h"
 
 /*********************************************************************
  * @fn      main
@@ -50,91 +46,39 @@ int main (void) {
     Delay_Init();
     USART_Printf_Init (115200);
     DUG_PRINTF ("SystemClk:%d\r\n", SystemCoreClock);
-    DUG_PRINTF ("I AM IN\r\n");
-    printf ("I AM IN\r\n");
 
     /* Initialize TIM3 */
     TIM3_Init (9, SystemCoreClock / 10000 - 1);
     DUG_PRINTF ("TIM3 Init OK!\r\n");
 
     /* Initialize USBFS host */
-    DUG_PRINTF ("USBFS Host Init\r\n");
-    USBFS_RCC_Init();
-    USBFS_Host_Init (ENABLE);
-    memset (&RootHubDev.bStatus, 0, sizeof (ROOT_HUB_DEVICE));
-    memset (&HostCtl[DEF_USBFS_PORT_INDEX * DEF_ONE_USB_SUP_DEV_TOTAL].InterfaceNum, 0, DEF_ONE_USB_SUP_DEV_TOTAL * sizeof (HOST_CTL));
+    usb_init();
 
+    /* Initialize peripherals */
+    DUG_PRINTF ("Initializing TIM2...\r\n");
     TIM2_Init();
+    DUG_PRINTF ("TIM2 Init OK\r\n");
+    
+    DUG_PRINTF ("Initializing TIM4...\r\n");
     TIM4_Init();
+    DUG_PRINTF ("TIM4 Init OK\r\n");
+    
+    DUG_PRINTF ("Initializing GPIO...\r\n");
     GPIO_Config();
+    DUG_PRINTF ("GPIO Init OK\r\n");
+    
+    DUG_PRINTF ("Initializing Mouse...\r\n");
     InitMouse();
-    DUG_PRINTF ("TIM2,4 Delay, GPIO and Mouse Init OK!\r\n");
+    DUG_PRINTF ("Mouse Init OK\r\n");
+    
+    /* Initialize Amiga keyboard interface */
+    DUG_PRINTF ("Initializing Amiga keyboard...\r\n");
+    amikb_startup();
+    DUG_PRINTF ("Amiga keyboard initialized\r\n");
+    
+    DUG_PRINTF ("All systems initialized - entering main loop\r\n");
+
     while (1) {
-        USBH_MainDeal();
-
-        // Handle HID Device
-        if (RootHubDev.bType == USB_DEV_CLASS_HID) {
-
-            for (int itf = 0; itf < DEF_INTERFACE_NUM_MAX; itf++) {
-                // Handle mouse
-                if (HostCtl[0].Interface[itf].HIDRptDesc.type == REPORT_TYPE_MOUSE) {
-                    HID_MOUSE_Info_TypeDef *mousemap = USBH_GetMouseInfo (
-                        &HostCtl[0].Interface[itf]);
-                    ProcessMouse (mousemap);
-                }
-
-                // Handle gamepad
-                if (HostCtl[0].Interface[itf].HIDRptDesc.type == REPORT_TYPE_JOYSTICK) {
-
-                    HID_gamepad_Info_TypeDef *gamepad = GetGamepadInfo (
-                        &HostCtl[0].Interface[itf]);
-                    ProcessGamepad (gamepad);
-                }
-
-                // Handle Keyboard
-                if (HostCtl[0].Interface[itf].HIDRptDesc.type == REPORT_TYPE_KEYBOARD) {
-                    // HID_KEYBD_Info_TypeDef *USBH_HID_GetKeybdInfo(Interface *Itf)
-                    HID_KEYBD_Info_TypeDef *kbd = USBH_HID_GetKeybdInfo (
-                        &HostCtl[0].Interface[itf]);
-
-                    amikb_process (kbd);
-                }
-            }
-        }
-
-        // Handle HUB Device
-
-        if (RootHubDev.bType == USB_DEV_CLASS_HUB) {
-
-            // Iterate over all devices
-            for (uint8_t device = 1; device < 5; device++) {
-                // Iterate over all interfaces
-                for (int itf = 0; itf < DEF_INTERFACE_NUM_MAX; itf++) {
-                    // // Handle mouse
-                    // if (HostCtl[device].Interface[itf].HIDRptDesc.type == REPORT_TYPE_MOUSE) {
-                    //     HID_MOUSE_Info_TypeDef *mousemap = USBH_GetMouseInfo (
-                    //         &HostCtl[device].Interface[itf]);
-                    //     ProcessMouse (mousemap);
-                    // }
-
-                    // // Handle gamepad
-                    // if (HostCtl[device].Interface[itf].HIDRptDesc.type == REPORT_TYPE_JOYSTICK) {
-
-                    //  HID_gamepad_Info_TypeDef *gamepad = GetGamepadInfo (
-                    //      &HostCtl[device].Interface[itf]);
-                    //  ProcessGamepad (gamepad);
-                    // }
-
-                    // Handle Keyboard
-                    if (HostCtl[device].Interface[itf].HIDRptDesc.type == REPORT_TYPE_KEYBOARD) {
-                        HID_KEYBD_Info_TypeDef *kbd = USBH_HID_GetKeybdInfo (
-                            &HostCtl[device].Interface[itf]);
-
-
-                        //  amikb_process (kbd);
-                    }
-                }
-            }
-        }
+        usb_process_devices();
     }
 }
