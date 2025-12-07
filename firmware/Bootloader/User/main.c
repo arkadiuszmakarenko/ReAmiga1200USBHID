@@ -35,10 +35,6 @@ int main (void) {
 
     Delay_Init();
     USART_Printf_Init (115200);
-    printf ("\r\n\r\n");
-    printf ("=================================\r\n");
-    printf ("  RISKYREA1200 Bootloader v1.0\r\n");
-    printf ("=================================\r\n");
 
     // Initialize IAP subsystem
     printf ("Initializing IAP subsystem...\r\n");
@@ -60,14 +56,13 @@ int main (void) {
     GPIO_Init (GPIOB, &GPIO_InitStructure);
 
     if (GPIO_ReadInputDataBit (GPIOA, GPIO_Pin_3) == 0) {
-        printf ("GPIO PA3 is LOW - Entering IAP mode\r\n");
         printf ("Waiting for USB device...\r\n");
         blinkLed (10, 500);
         while (1) {
             IAP_Main_Deal();
         }
     } else {
-        printf ("GPIO PA3 is HIGH - Jumping to application\r\n");
+        printf ("Jumping to application\r\n");
         IAP_Jump_APP();
     }
 }
