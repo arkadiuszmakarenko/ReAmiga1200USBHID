@@ -38,7 +38,7 @@ extern "C" {
  * or change the default value below.
  */
 #ifndef DEBUG_ENABLE
-#define DEBUG_ENABLE    0
+#define DEBUG_ENABLE    1
 #endif
 
 /* UART Printf Definition */

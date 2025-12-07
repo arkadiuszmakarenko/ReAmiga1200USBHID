@@ -89,9 +89,9 @@ else
 endif
 
 # Base compiler flags
-CFLAGS = -march=rv32imac_zicsr \
+CFLAGS = -march=rv32imacxw \
          -mabi=ilp32 \
-         -msmall-data-limit=0 \
+         -msmall-data-limit=8 \
          -msave-restore \
          -fmax-errors=20 \
          -fmessage-length=0 \
@@ -99,11 +99,6 @@ CFLAGS = -march=rv32imac_zicsr \
          -ffunction-sections \
          -fdata-sections \
          -fno-common \
-         -fno-builtin \
-         -fno-unwind-tables \
-         -fno-asynchronous-unwind-tables \
-         -fno-stack-protector \
-         -fmerge-all-constants \
          -Wunused \
          -Wuninitialized \
          -std=gnu99 \
@@ -111,9 +106,9 @@ CFLAGS = -march=rv32imac_zicsr \
          -MP
 
 # Assembler flags
-ASFLAGS = -march=rv32imac_zicsr \
+ASFLAGS = -march=rv32imacxw \
           -mabi=ilp32 \
-          -msmall-data-limit=0 \
+          -msmall-data-limit=8 \
           -msave-restore \
           -fmax-errors=20 \
           -fmessage-length=0 \
@@ -129,9 +124,9 @@ ASFLAGS = -march=rv32imac_zicsr \
           -MP
 
 # Base linker flags
-LDFLAGS = -march=rv32imac_zicsr \
+LDFLAGS = -march=rv32imacxw \
           -mabi=ilp32 \
-          -msmall-data-limit=0 \
+          -msmall-data-limit=8 \
           -msave-restore \
           -fmax-errors=20 \
           -fmessage-length=0 \
@@ -139,19 +134,12 @@ LDFLAGS = -march=rv32imac_zicsr \
           -ffunction-sections \
           -fdata-sections \
           -fno-common \
-          -fno-builtin \
-          -fno-unwind-tables \
-          -fno-asynchronous-unwind-tables \
-          -fno-stack-protector \
-          -fmerge-all-constants \
           -Wunused \
           -Wuninitialized \
           -T$(LINKER_SCRIPT) \
           -nostartfiles \
           -Xlinker --gc-sections \
-          -Xlinker --print-memory-usage \
           -Wl,-Map,$(BUILD_DIR)/$(PROJECT).map \
-          -Wl,--relax \
           --specs=nano.specs \
           --specs=nosys.specs
 
@@ -176,10 +164,10 @@ ifeq ($(BUILD_TYPE),Debug)
 	# Avoid LTO in debug for clearer stepping and symbols
 	# No strip of symbols
 else
-	# Size-optimized release
-	CFLAGS += -Os -flto -fno-inline-functions-called-once -fno-tree-loop-optimize -fno-jump-tables
+	# Size-optimized release - match MRS toolchain settings
+	CFLAGS += -Os -flto --param=highcode-gen-section-name=1
 	ASFLAGS += -Os
-	LDFLAGS += -Os -flto -Wl,--strip-all
+	LDFLAGS += -Os -flto
 endif
 
 # Find all C source files
@@ -288,12 +276,12 @@ combine-release:
 		echo "Building RISKYREA1200Bootloader ($(COMBINE_BUILD_TYPE))..."; \
 		$(MAKE) build-single PROJECT=RISKYREA1200Bootloader BUILD_TYPE=$(COMBINE_BUILD_TYPE); \
 	fi
-	@echo "Expanding Bootloader.bin to 12KB (0x3000 bytes)..."
-	@dd if=build/Bootloader/$(COMBINE_BUILD_TYPE)/Bootloader.bin of=build/Bootloader_padded.bin bs=1 count=12288 conv=sync 2>/dev/null
-	@truncate -s 12288 build/Bootloader_padded.bin
-	@echo "Expanding RISKYREA1200Bootloader.bin to 52KB (0xD000 bytes)..."
-	@dd if=build/RISKYREA1200Bootloader/$(COMBINE_BUILD_TYPE)/RISKYREA1200Bootloader.bin of=build/App_padded.bin bs=1 count=53248 conv=sync 2>/dev/null
-	@truncate -s 53248 build/App_padded.bin
+	@echo "Expanding Bootloader.bin to 16KB (0x4000 bytes)..."
+	@dd if=build/Bootloader/$(COMBINE_BUILD_TYPE)/Bootloader.bin of=build/Bootloader_padded.bin bs=1 count=16384 conv=sync 2>/dev/null
+	@truncate -s 16384 build/Bootloader_padded.bin
+	@echo "Expanding RISKYREA1200Bootloader.bin to 48KB (0xC000 bytes)..."
+	@dd if=build/RISKYREA1200Bootloader/$(COMBINE_BUILD_TYPE)/RISKYREA1200Bootloader.bin of=build/App_padded.bin bs=1 count=49152 conv=sync 2>/dev/null
+	@truncate -s 49152 build/App_padded.bin
 	@echo "Combining binaries..."
 	@cat build/Bootloader_padded.bin build/App_padded.bin > build/RISKYREA1200Release.bin
 	@rm -f build/Bootloader_padded.bin build/App_padded.bin
@@ -301,8 +289,8 @@ combine-release:
 	@ls -lh build/RISKYREA1200Release.bin
 	@echo ""
 	@echo "Flash layout:"
-	@echo "  0x00000000 - 0x00002FFF : Bootloader (12KB)"
-	@echo "  0x00003000 - 0x0000FFFF : Application (52KB)"
+	@echo "  0x00000000 - 0x00003FFF : Bootloader (16KB)"
+	@echo "  0x00004000 - 0x0000FFFF : Application (48KB)"
 	@echo "  Total: 64KB"
 
 # Show size information
@@ -324,6 +312,23 @@ flash: build/RISKYREA1200Release.bin
 	@if [ ! -f "$<" ]; then \
 		echo "Combined binary not found. Building..."; \
 		$(MAKE) all-release; \
+	fi
+	@if [ -f "$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd" ]; then \
+		echo "Using MRS OpenOCD with sudo (required for USB access)..."; \
+		sudo $(shell pwd)/$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd \
+			-f $(shell pwd)/$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/wch-riscv.cfg \
+			-c "program $(shell pwd)/$< verify reset exit 0x00000000"; \
+	else \
+		echo "MRS OpenOCD not found. Please configure your programming tool."; \
+		echo "You can flash manually using: $<"; \
+	fi
+
+# Flash bootloader only
+flash-bootloader: build/Bootloader/Release/Bootloader.bin
+	@echo "Flashing Bootloader only (16KB) to device at 0x00000000..."
+	@if [ ! -f "$<" ]; then \
+		echo "Bootloader binary not found. Building..."; \
+		$(MAKE) build-single PROJECT=Bootloader BUILD_TYPE=Release; \
 	fi
 	@if [ -f "$(MRS_TOOLCHAIN_ROOT)/OpenOCD/OpenOCD/bin/openocd" ]; then \
 		echo "Using MRS OpenOCD with sudo (required for USB access)..."; \
@@ -387,6 +392,7 @@ help:
 	@echo "  build-single     - Build single selected project (use PROJECT= and BUILD_TYPE=)"
 	@echo "  combine-release  - Combine Bootloader + RISKYREA1200Bootloader binaries"
 	@echo "  flash            - Flash combined release binary to device"
+	@echo "  flash-bootloader - Flash bootloader only to device"
 	@echo "  erase            - Erase entire flash chip"
 	@echo "  clean            - Remove all build artifacts"
 	@echo "  size             - Show size information for the ELF file"
@@ -450,5 +456,5 @@ toolchain-info:
 	fi
 
 # Phony targets
-.PHONY: all build-single clean clean-all size memory-usage flash erase debug help toolchain-info \
+.PHONY: all build-single clean clean-all size memory-usage flash flash-bootloader erase debug help toolchain-info \
         check-toolchain all-release all-debug post-build combine-release
