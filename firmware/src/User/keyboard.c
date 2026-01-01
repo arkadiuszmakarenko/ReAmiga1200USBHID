@@ -1,10 +1,16 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include "keyboard.h"
 #include "usb_keyboard.h"
 #include "gpio.h"
+
+
+uint8_t charToSend;
+uint8_t processFlag = 1;
+uint8_t i = 0;
+led_status_t rval;
+
 
 static HID_KEYBD_Info_TypeDef prevkeycode = {
     .lctrl = 0,
@@ -22,6 +28,10 @@ static HID_KEYBD_Info_TypeDef prevkeycode = {
     .keys[4] = 0,
     .keys[5] = 0,
 };
+
+
+#define KEY_BUFF_SIZE 50
+
 
 #define KEY_NONE 0x00
 #define KEY_ERRORROLLOVER 0x01
@@ -365,7 +375,6 @@ static const uint8_t scancodeamiga[KEYCODE_TAB_SIZE][2] =
         {KEY_NONE,                            0x6F}, // SPARE
 };
 
-
 /**
         The keyboard transmits 8-bit data words serially to the main unit. Before
         the transmission starts, both KCLK and KDAT are high.  The keyboard starts
@@ -518,6 +527,11 @@ static const uint8_t scancodeamiga[KEYCODE_TAB_SIZE][2] =
 
  **/
 
+typedef enum {
+    DAT_OUTPUT = 0,
+    DAT_INPUT,
+} kbd_dir;
+
 static unsigned char prev_keycode = 0xff;
 static unsigned char capslk = 0;
 static unsigned char numlk = 0;
@@ -526,336 +540,325 @@ static unsigned char scrolllk = 0;
 static led_status_t amikb_send (uint8_t code, int press);
 
 static uint8_t scancode_to_amiga (uint8_t lkey) {
-#if DEF_DEBUG_PRINTF
-    printf ("scancode_to_amiga: lkey=0x%02X\n", lkey);
-#endif
-    for (uint8_t i = 0; i < KEYCODE_TAB_SIZE; i++) {
+    uint8_t i = 0, keyvalue = lkey;
+    for (i = 0; i < KEYCODE_TAB_SIZE; i++) {
+
         if (lkey == scancodeamiga[i][0]) {
-#if DEF_DEBUG_PRINTF
-            printf ("scancode_to_amiga: found amiga=0x%02X\n", scancodeamiga[i][1]);
-#endif
-            return scancodeamiga[i][1];
+            keyvalue = scancodeamiga[i][1];
+            break;
         }
     }
-#if DEF_DEBUG_PRINTF
-    printf ("scancode_to_amiga: not found, returning lkey=0x%02X\n", lkey);
-#endif
-    return lkey;
+    return keyvalue;
 }
 
 // **************************
 
+
 void amikb_startup (void) {
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_startup: begin\n");
-#endif
+    uint8_t AMIGA_INITPOWER = 0xFD;  // 11111101
+    uint8_t AMIGA_TERMPOWER = 0xFE;  // 11111110
     Delay_Us (200);
+    // De-assert nRESET for Amiga...
+    // amikb_reset();
+    Delay_Us (200);                            // wait for sync
+    amikb_send ((uint8_t)AMIGA_INITPOWER, 0);  // send "initiate power-up"
     Delay_Us (200);
-    amikb_send (0xFD, 0);
-    Delay_Us (200);
-    amikb_send (0xFE, 0);
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_startup: end\n");
-#endif
+    amikb_send ((uint8_t)AMIGA_TERMPOWER, 0);  // send "terminate power-up"
 }
+
+static int keyboard_is_present = 0;
 
 void amikb_ready (int isready) {
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_ready: isready=%d\n", isready);
-#endif
-    (void)isready;
-}
-
-static led_status_t handle_lock_key (uint8_t keycode, int press, unsigned char *lock_state, led_status_t on_led, led_status_t off_led) {
-#if DEF_DEBUG_PRINTF
-    printf ("handle_lock_key: keycode=0x%02X, press=%d, lock_state=%d\n", keycode, press, *lock_state);
-#endif
-    if (!(*lock_state)) {
-        if (press) {
-            prev_keycode = 0;
-#if DEF_DEBUG_PRINTF
-            printf ("handle_lock_key: returning on_led=%d\n", on_led);
-#endif
-            return on_led;
-        } else {
-            *lock_state = 1;
-            prev_keycode = 0;
-#if DEF_DEBUG_PRINTF
-            printf ("handle_lock_key: lock_state set to 1, returning NO_LED\n");
-#endif
-            return NO_LED;
-        }
-    } else {
-        if (press) {
-            prev_keycode = 0;
-#if DEF_DEBUG_PRINTF
-            printf ("handle_lock_key: already locked, press, returning NO_LED\n");
-#endif
-            return NO_LED;
-        } else {
-            *lock_state = 0;
-            prev_keycode = 0;
-#if DEF_DEBUG_PRINTF
-            printf ("handle_lock_key: lock_state set to 0, returning off_led=%d\n", off_led);
-#endif
-            return off_led;
-        }
-    }
+    keyboard_is_present = isready;
 }
 
 static led_status_t amikb_send (uint8_t keycode, int press) {
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_send: keycode=0x%02X, press=%d\n", keycode, press);
-#endif
     led_status_t rval = NO_LED;
 
-    if (keycode == 0x62 || keycode == 0x68 || keycode == 0x1c) {
+    if (keycode == 0x62 || keycode == 0x68 || keycode == 0x1c)  // Caps Lock, Num Lock or Scroll Lock Pressed or Released
+    {
+        // caps lock doesn't get a key release event when the key is released
+        // but rather when the caps lock is toggled off again
+        // But what about num lock?
+
         switch (keycode) {
-        case 0x62:
-#if DEF_DEBUG_PRINTF
-            printf ("amikb_send: CAPS_LOCK\n");
-#endif
-            return handle_lock_key (keycode, press, &capslk, LED_CAPS_LOCK_ON, LED_CAPS_LOCK_OFF);
-        case 0x68:
-#if DEF_DEBUG_PRINTF
-            printf ("amikb_send: NUM_LOCK\n");
-#endif
-            return handle_lock_key (keycode, press, &numlk, LED_NUM_LOCK_ON, LED_NUM_LOCK_OFF);
-        case 0x1c:
-#if DEF_DEBUG_PRINTF
-            printf ("amikb_send: SCROLL_LOCK\n");
-#endif
-            return handle_lock_key (keycode, press, &scrolllk, LED_SCROLL_LOCK_ON, LED_SCROLL_LOCK_OFF);
-        default:
+        case 0x62:  // CAPS LOCK LED
+            if (!capslk) {
+                if (press) {
+                    // DBG_V("### SEND TURN-ON CAPS LOCK LED. ALL UPPERCASE FROM NOW ###\r\n");
+                    rval = LED_CAPS_LOCK_ON;
+                    prev_keycode = 0;
+                    break;
+                } else {
+                    // DBG_N("### IGNORING RELEASE FOR CAPS LOCK ###\n\r");
+                    //  Toggle for next time press
+                    capslk = 1;
+                    prev_keycode = 0;
+                    return NO_LED;
+                }
+            } else {
+                if (press) {
+                    // DBG_V("### IGNORING PRESS FOR CAPS LOCK. IT WAS ALREADY PRESSED ###\r\n");
+                    prev_keycode = 0;
+                    return NO_LED;
+                } else {
+                    // DBG_N("### SEND TURN-OFF CAPS LOCK LED. ALL LOWERCASE FROM NOW ###\r\n");
+                    capslk = 0;
+                    rval = LED_CAPS_LOCK_OFF;
+                    prev_keycode = 0;
+                    break;
+                }
+            }
+            break;
+        case 0x68:  // NUM LOCK LED
+            if (!numlk) {
+                if (press) {
+                    // DBG_V("### SEND TURN-ON NUM LOCK LED. NUMERIC KEYPAD LOCKED FROM NOW ###\r\n");
+                    rval = LED_NUM_LOCK_ON;
+                    prev_keycode = 0;
+                    break;
+                } else {
+                    // DBG_N("### IGNORING RELEASE FOR NUM LOCK ###\n\r");
+                    //  Toggle for next time press
+                    numlk = 1;
+                    prev_keycode = 0;
+                    return NO_LED;
+                }
+            } else {
+                if (press) {
+                    //	DBG_V("### IGNORING PRESS FOR NUM LOCK. IT WAS ALREADY PRESSED ###\r\n");
+                    prev_keycode = 0;
+                    return NO_LED;
+                } else {
+                    // DBG_N("### SEND TURN-OFF NUM LOCK LED. NUMERIC KEYPAD UNLOCKED FROM NOW ###\r\n");
+                    numlk = 0;
+                    rval = LED_NUM_LOCK_OFF;
+                    prev_keycode = 0;
+                    break;
+                }
+            }
+            break;
+        case 0x1c:  // SCROLL LOCK LED
+            if (!scrolllk) {
+                if (press) {
+                    //	DBG_V("### SEND TURN-ON SCROLL LOCK LED. SCROLL IS LOCKED FROM NOW ###\r\n");
+                    rval = LED_SCROLL_LOCK_ON;
+                    prev_keycode = 0;
+                    break;
+                } else {
+                    // DBG_N("### IGNORING RELEASE FOR SCROLL LOCK ###\n\r");
+                    //  Toggle for next time press
+                    scrolllk = 1;
+                    prev_keycode = 0;
+                    return NO_LED;
+                }
+            } else {
+                if (press) {
+                    // DBG_V("### IGNORING PRESS FOR SCROLL LOCK. IT WAS ALREADY PRESSED ###\r\n");
+                    prev_keycode = 0;
+                    return NO_LED;
+                } else {
+                    // DBG_N("### SEND TURN-OFF SCROLL LOCK LED. SCROLL IS UNLOCKED FROM NOW ###\r\n");
+                    scrolllk = 0;
+                    rval = LED_SCROLL_LOCK_OFF;
+                    prev_keycode = 0;
+                    break;
+                }
+            }
+            break;
+        default: {
+            // DBG_V("NUMLOCK %d - CAPSLOCK %d - SCROLLLOCK %d - PRESSED: %d\r\n",
+            // numlk, capslk, scrolllk, press);
             return NO_LED;
+        } break;
         }
     }
 
+    // keycode bit transfer order: 6 5 4 3 2 1 0 7 (7 is pressed flag)
     keycode = (keycode << 1) | (~press & 1);
     if (keycode == prev_keycode) {
-#if DEF_DEBUG_PRINTF
-        printf ("amikb_send: duplicate keycode, skipping\n");
-#endif
+        // DBG_N("NO SENDING THE SAME KEYCODE TWO TIMES IN A ROW\r\n");
         return NO_LED;
     }
 
     prev_keycode = keycode;
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_send: sending keycode=0x%02X\n", keycode);
-#endif
 
-    GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_SET);
-    GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_RESET);
+    // send to Amiga
+
+    GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_SET);  // Normally KBD_DATA pin is HIGH
+
+    // pulse the data line and wait for about 100us
+    GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_RESET);  // KBD_DATA pin is LOW
     Delay_Us (100);
-    GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_SET);
+    GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_SET);    // KBD_DATA pin is HIGH
     Delay_Us (100);
 
-    for (uint8_t i = 0; i < 8; i++) {
-        GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, (keycode & 0x80) ? Bit_RESET : Bit_SET);
+    for (i = 0; i < 8; i++) {
+        // data line is inverted
+        if (keycode & 0x80) {
+            // a logic 1 is low in hardware
+            GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_RESET);
+        } else {
+            // a logic 0 is high in hardware
+            GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_SET);
+        }
         keycode <<= 1;
         Delay_Us (10);
-        GPIO_WriteBit (KBD_CLOCK_GPIO_Port, KBD_CLOCK_Pin, Bit_RESET);
+        /* pulse the clock */
+        GPIO_WriteBit (KBD_CLOCK_GPIO_Port, KBD_CLOCK_Pin, Bit_RESET);  // Clear KBD_CLOCK pin
         Delay_Us (10);
-        GPIO_WriteBit (KBD_CLOCK_GPIO_Port, KBD_CLOCK_Pin, Bit_SET);
+        GPIO_WriteBit (KBD_CLOCK_GPIO_Port, KBD_CLOCK_Pin, Bit_SET);    // Set KBD_CLOCK pin
         Delay_Us (10);
     }
     Delay_Us (100);
-    GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_SET);
+    GPIO_WriteBit (KBD_DATA_GPIO_Port, KBD_DATA_Pin, Bit_SET);  // Set KBD_DATA pin
     Delay_Us (100);
+
 
     return rval;
 }
 
+// **************************
 void amikb_reset (void) {
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_reset: begin\n");
-#endif
-    GPIO_WriteBit (KB_RESET_GPIO_Port, KB_RESET_GPIO_Pin, Bit_RESET);
-    Delay_Ms (200);
+    int8_t var;
+    for (var = 0; var < 10; ++var) {
+        GPIO_WriteBit (KB_RESET_GPIO_Port, KB_RESET_GPIO_Pin, Bit_RESET);
+    }
+
     GPIO_WriteBit (KB_RESET_GPIO_Port, KB_RESET_GPIO_Pin, Bit_SET);
 
     prev_keycode = 0xff;
     capslk = 0;
     numlk = 0;
     scrolllk = 0;
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_reset: end\n");
-#endif
 }
 
-void trigger_irq7 (void) {
-#if DEF_DEBUG_PRINTF
-    printf ("trigger_irq7: begin\n");
-#endif
-    GPIO_WriteBit (IRQ7_Port, IRQ7_Pin, Bit_SET);
-    Delay_Ms (200);
-    GPIO_WriteBit (IRQ7_Port, IRQ7_Pin, Bit_RESET);
-#if DEF_DEBUG_PRINTF
-    printf ("trigger_irq7: end\n");
-#endif
-}
+// ****************************
 
-void trigger_k0_k1 (void) {
-    static uint8_t k0_k1_state = 0;
-
-#if DEF_DEBUG_PRINTF
-    printf ("trigger_k0_k1: current state=%d\n", k0_k1_state);
-#endif
-
-    switch (k0_k1_state) {
-    case 0:  // State 00
-#if DEF_DEBUG_PRINTF
-        printf ("trigger_k0_k1: state 00 (K0=0, K1=0)\n");
-#endif
-        GPIO_WriteBit (K0_Port, K0_Pin, Bit_RESET);
-        GPIO_WriteBit (K1_Port, K1_Pin, Bit_RESET);
-        k0_k1_state = 1;
-        Delay_Ms (200);
-        amikb_reset();
-        break;
-    case 1:  // State 01
-#if DEF_DEBUG_PRINTF
-        printf ("trigger_k0_k1: state 01 (K0=1, K1=0)\n");
-#endif
-        GPIO_WriteBit (K0_Port, K0_Pin, Bit_SET);
-        GPIO_WriteBit (K1_Port, K1_Pin, Bit_RESET);
-        k0_k1_state = 2;
-        Delay_Ms (200);
-        amikb_reset();
-        break;
-    case 2:  // State 10
-#if DEF_DEBUG_PRINTF
-        printf ("trigger_k0_k1: state 10 (K0=0, K1=1)\n");
-#endif
-        GPIO_WriteBit (K0_Port, K0_Pin, Bit_RESET);
-        GPIO_WriteBit (K1_Port, K1_Pin, Bit_SET);
-        k0_k1_state = 3;
-        Delay_Ms (200);
-        amikb_reset();
-        break;
-    case 3:  // State 11
-#if DEF_DEBUG_PRINTF
-        printf ("trigger_k0_k1: state 11 (K0=1, K1=1)\n");
-#endif
-        GPIO_WriteBit (K0_Port, K0_Pin, Bit_SET);
-        GPIO_WriteBit (K1_Port, K1_Pin, Bit_SET);
-        k0_k1_state = 0;
-        Delay_Ms (200);
-        amikb_reset();
-        break;
-    }
-#if DEF_DEBUG_PRINTF
-    printf ("trigger_k0_k1: next state=%d\n", k0_k1_state);
-#endif
-}
-
-static void process_modifier_key (uint8_t *prev, uint8_t curr, uint8_t key, led_status_t *rval) {
-    if (*prev != curr) {
-#if DEF_DEBUG_PRINTF
-        printf ("process_modifier_key: key=0x%02X, prev=%d, curr=%d\n", key, *prev, curr);
-#endif
-        *prev = curr;
-        *rval |= amikb_send (scancode_to_amiga (key), curr);
-    }
-}
+#define OK_RESET 3 /* 3 special keys to have a KBRESET */
 
 void amikb_process (HID_KEYBD_Info_TypeDef *kbdata) {
-    if (kbdata == NULL) {
+
+
+    if (kbdata == NULL)
         return;
-    }
 
-    led_status_t rval = NO_LED;
+    int i;
+    int j;
+    rval = NO_LED; /* 0 means no USB interaction such as leds, ... */
 
+
+    // check for reset
     if (kbdata->lctrl == 1 && kbdata->lalt == 1 && kbdata->keys[0] == KEY_DELETE) {
-#if DEF_DEBUG_PRINTF
-        printf ("amikb_process: Ctrl+Alt+Del detected, resetting\n");
-#endif
         amikb_reset();
-        return;
     }
 
-    if ((kbdata->lctrl == 1 || kbdata->rctrl == 1) && kbdata->keys[0] == KEY_F11) {
-#if DEF_DEBUG_PRINTF
-        printf ("amikb_process: Ctrl+F11 detected, triggering IRQ7\n");
-#endif
-        trigger_irq7();
-        return;
+    // ----------------------------------------------- LEFT
+
+    // LEFT SHIFT
+    if (prevkeycode.lshift != kbdata->lshift) {
+        prevkeycode.lshift = kbdata->lshift;
+        rval |= amikb_send (scancode_to_amiga (KEY_LEFTSHIFT), kbdata->lshift);
     }
 
-    if ((kbdata->lctrl == 1 || kbdata->rctrl == 1) && kbdata->keys[0] == KEY_F12) {
-#if DEF_DEBUG_PRINTF
-        printf ("amikb_process: Ctrl+F12 detected, triggering K0/K1\n");
-#endif
-        trigger_k0_k1();
-        return;
+    // LEFT ALT
+    if (prevkeycode.lalt != kbdata->lalt) {
+        prevkeycode.lalt = kbdata->lalt;
+        rval |= amikb_send (scancode_to_amiga (KEY_LEFTALT), kbdata->lalt);
     }
 
-    process_modifier_key (&prevkeycode.lshift, kbdata->lshift, KEY_LEFTSHIFT, &rval);
-    process_modifier_key (&prevkeycode.lalt, kbdata->lalt, KEY_LEFTALT, &rval);
-    process_modifier_key (&prevkeycode.lctrl, kbdata->lctrl, KEY_LEFTCONTROL, &rval);
-    process_modifier_key (&prevkeycode.lgui, kbdata->lgui, KEY_LEFT_GUI, &rval);
-    process_modifier_key (&prevkeycode.rshift, kbdata->rshift, KEY_RIGHTSHIFT, &rval);
-    process_modifier_key (&prevkeycode.ralt, kbdata->ralt, KEY_RIGHTALT, &rval);
-    process_modifier_key (&prevkeycode.rctrl, kbdata->rctrl, KEY_RIGHTCONTROL, &rval);
-    process_modifier_key (&prevkeycode.rgui, kbdata->rgui, KEY_RIGHT_GUI, &rval);
+    // LEFT CTRL
+    if (prevkeycode.lctrl != kbdata->lctrl) {
+        prevkeycode.lctrl = kbdata->lctrl;
+        rval |= amikb_send (scancode_to_amiga (KEY_LEFTCONTROL), kbdata->lctrl);
+    }
 
+    // LEFT GUI
+    if (prevkeycode.lgui != kbdata->lgui) {
+        prevkeycode.lgui = kbdata->lgui;
+        rval |= amikb_send (scancode_to_amiga (KEY_LEFT_GUI), kbdata->lgui);
+    }
+
+    // ----------------------------------------------- RIGHT
+    // RIGHT SHIFT
+    if (prevkeycode.rshift != kbdata->rshift) {
+        prevkeycode.rshift = kbdata->rshift;
+        rval |= amikb_send (scancode_to_amiga (KEY_RIGHTSHIFT), kbdata->rshift);
+    }
+
+    // RIGHT ALT
+    if (prevkeycode.ralt != kbdata->ralt) {
+        prevkeycode.ralt = kbdata->ralt;
+        rval |= amikb_send (scancode_to_amiga (KEY_RIGHTALT), kbdata->ralt);
+    }
+
+    // RIGHT CTRL
+    if (prevkeycode.rctrl != kbdata->rctrl) {
+        prevkeycode.rctrl = kbdata->rctrl;
+        rval |= amikb_send (scancode_to_amiga (KEY_RIGHTCONTROL), kbdata->rctrl);
+    }
+
+    // RIGHT GUI
+    if (prevkeycode.rgui != kbdata->rgui) {
+        prevkeycode.rgui = kbdata->rgui;
+        rval |= amikb_send (scancode_to_amiga (KEY_RIGHT_GUI), kbdata->rgui);
+    }
+
+
+    // Send all pressed key
     uint8_t keysToPress[KEY_PRESSED_MAX] = {0};
     uint8_t keysToRelease[KEY_PRESSED_MAX] = {0};
+
     int idxPress = 0;
     int idxRelease = 0;
 
-    for (int i = 0; i < KEY_PRESSED_MAX; i++) {
+    // Find keys to release
+    for (i = 0; i < KEY_PRESSED_MAX; i++) {
         int found = 0;
-        for (int j = 0; j < KEY_PRESSED_MAX; j++) {
+        for (j = 0; j < KEY_PRESSED_MAX; j++) {
             if (prevkeycode.keys[i] == kbdata->keys[j]) {
                 found = 1;
-                break;
             }
         }
-        if (!found) {
-            keysToRelease[idxRelease++] = prevkeycode.keys[i];
+
+        if (found == 0) {
+            keysToRelease[idxRelease] = prevkeycode.keys[i];
+            idxRelease++;
         }
     }
 
-    for (int i = 0; i < KEY_PRESSED_MAX; i++) {
+    // Find keys to press (not already pressed)
+    for (i = 0; i < KEY_PRESSED_MAX; i++) {
         int found = 0;
-        for (int j = 0; j < KEY_PRESSED_MAX; j++) {
+        for (j = 0; j < KEY_PRESSED_MAX; j++) {
             if (kbdata->keys[i] == prevkeycode.keys[j]) {
                 found = 1;
-                break;
             }
         }
-        if (!found) {
-            keysToPress[idxPress++] = kbdata->keys[i];
+
+        if (found == 0) {
+            keysToPress[idxPress] = kbdata->keys[i];
+            idxPress++;
         }
     }
 
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_process: idxRelease=%d, idxPress=%d\n", idxRelease, idxPress);
-#endif
-
-    for (int i = 0; i < KEY_PRESSED_MAX; i++) {
-        if (keysToRelease[i] != 0x00) {
-#if DEF_DEBUG_PRINTF
-            printf ("amikb_process: releasing key=0x%02X\n", keysToRelease[i]);
-#endif
-            rval |= amikb_send (scancode_to_amiga (keysToRelease[i]), 0);
+    // Send release keys
+    for (i = 0; i < KEY_PRESSED_MAX; i++) {
+        if (keysToRelease[i] != 0x00)  // Previous key was released
+        {
+            rval |= amikb_send (scancode_to_amiga (keysToRelease[i]), 0 /* Released */);
         }
     }
 
-    for (int i = 0; i < KEY_PRESSED_MAX; i++) {
+    // send press keys
+    for (i = 0; i < KEY_PRESSED_MAX; i++) {
         if (keysToPress[i] != 0x00) {
-#if DEF_DEBUG_PRINTF
-            printf ("amikb_process: pressing key=0x%02X\n", keysToPress[i]);
-#endif
-            rval |= amikb_send (scancode_to_amiga (keysToPress[i]), 1);
+            rval |= amikb_send (scancode_to_amiga (keysToPress[i]), 1 /* Pressed */);
         }
     }
 
-    for (int i = 0; i < KEY_PRESSED_MAX; i++) {
+    // copy keys for next handling
+    for (i = 0; i < KEY_PRESSED_MAX; i++) {
         prevkeycode.keys[i] = kbdata->keys[i];
     }
-#if DEF_DEBUG_PRINTF
-    printf ("amikb_process: end\n");
-#endif
 }
