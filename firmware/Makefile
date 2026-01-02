@@ -2,7 +2,7 @@
 # Supports three build variants:
 #   - Bootloader: Custom bootloader (FLASH @ 0x00000000, src in Bootloader/)
 #   - RISKYREA1200: Standalone application (FLASH @ 0x00000000, src in src/)
-#   - RISKYREA1200Bootloader: Application for custom bootloader (FLASH @ 0x00003000, src in src/)
+#   - RISKYREA1200Bootloader: Application for custom bootloader (FLASH @ 0x00004000, src in src/)
 # Main applications share source code from src/ directory
 
 #############################
@@ -404,7 +404,7 @@ help:
 	@echo "Project Selection:"
 	@echo "  PROJECT=Bootloader              - Custom bootloader (FLASH @ 0x00000000, 64K)"
 	@echo "  PROJECT=RISKYREA1200            - Standalone application (FLASH @ 0x00000000, 64K)"
-	@echo "  PROJECT=RISKYREA1200Bootloader  - Bootloader application (FLASH @ 0x00003000, 54K)"
+	@echo "  PROJECT=RISKYREA1200Bootloader  - Bootloader application (FLASH @ 0x00004000, 48K)"
 	@echo ""
 	@echo "Build Type Selection:"
 	@echo "  BUILD_TYPE=Release  - Size-optimized build (default)"
