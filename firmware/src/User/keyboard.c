@@ -34,128 +34,101 @@ static keyboard_state_t g_kbd_state = {
     .is_ready = false
 };
 
-static const uint8_t scancodeamiga[KEYCODE_TAB_SIZE][2] = {
-    {KEY_GRAVE_ACCENT_AND_TILDE,          0x00},
-    {KEY_1_EXCLAMATION_MARK,              0x01}, // 1!
-    {KEY_2_AT,                            0x02}, // 2@
-    {KEY_3_NUMBER_SIGN,                   0x03}, // 3#
-    {KEY_4_DOLLAR,                        0x04}, // 4$
-    {KEY_5_PERCENT,                       0x05}, // 5%
-    {KEY_6_CARET,                         0x06}, // 6^
-    {KEY_7_AMPERSAND,                     0x07}, // 7&
-    {KEY_8_ASTERISK,                      0x08}, // 8*
-    {KEY_9_OPARENTHESIS,                  0x09}, // 9(
-    {KEY_0_CPARENTHESIS,                  0x0A}, // 0)
-    {KEY_MINUS_UNDERSCORE,                0x0B}, // -_
-    {KEY_EQUAL_PLUS,                      0x0C}, // +=
-    {KEY_BACKSLASH_VERTICAL_BAR,          0x0D}, // |
-    {KEY_KEYPAD_0_INSERT,                 0x0F}, // NUM 0
-    {KEY_Q,                               0x10}, // Q
-    {KEY_W,                               0x11}, // W
-    {KEY_E,                               0x12}, // E
-    {KEY_R,                               0x13}, // R
-    {KEY_T,                               0x14}, // T
-    {KEY_Y,                               0x15}, // Y
-    {KEY_U,                               0x16}, // U
-    {KEY_I,                               0x17}, // I
-    {KEY_O,                               0x18}, // O
-    {KEY_P,                               0x19}, // P
-    {KEY_OBRACKET_AND_OBRACE,             0x1A}, // [{
-    {KEY_CBRACKET_AND_CBRACE,             0x1B}, // }]
-    {KEY_KEYPAD_1_END,                    0x1D}, // NUM 1
-    {KEY_KEYPAD_2_DOWN_ARROW,             0x1E}, // NUM 2
-    {KEY_KEYPAD_3_PAGEDN,                 0x1F}, // NUM 3
-    {KEY_A,                               0x20}, // A
-    {KEY_S,                               0x21}, // S
-    {KEY_D,                               0x22}, // D
-    {KEY_F,                               0x23}, // F
-    {KEY_G,                               0x24}, // G
-    {KEY_H,                               0x25}, // H
-    {KEY_J,                               0x26}, // J
-    {KEY_K,                               0x27}, // K
-    {KEY_L,                               0x28}, // L
-    {KEY_SEMICOLON_COLON,                 0x29}, // :;
-    {KEY_SINGLE_AND_DOUBLE_QUOTE,         0x2A}, // "'
-    {KEY_ENTER,                           0x44}, // <Enter>
-    {KEY_KEYPAD_4_LEFT_ARROW,             0x2D}, // NUM 4
-    {KEY_KEYPAD_5,                        0x2E}, // NUM 5
-    {KEY_KEYPAD_6_RIGHT_ARROW,            0x2F}, // NUM 6
-    {KEY_INTERNATIONAL2,                  0x30}, // <SHIFT> international?
-    {KEY_Z,                               0x31}, // Z
-    {KEY_X,                               0x32}, // X
-    {KEY_C,                               0x33}, // C
-    {KEY_V,                               0x34}, // V
-    {KEY_B,                               0x35}, // B
-    {KEY_N,                               0x36}, // N
-    {KEY_M,                               0x37}, // M
-    {KEY_COMMA_AND_LESS,                  0x38}, // <,
-    {KEY_KEYPAD_COMMA,                    0x38}, // NUM ,
-    {KEY_DOT_GREATER,                     0x39}, // >.
-    {KEY_SLASH_QUESTION,                  0x3A}, // ?/
-    {KEY_KEYPAD_7_HOME,                   0x3D}, // NUM 7
-    {KEY_KEYPAD_8_UP_ARROW,               0x3E}, // NUM 8
-    {KEY_KEYPAD_9_PAGEUP,                 0x3F}, // NUM 9
-    {KEY_SPACEBAR,                        0x40}, // SPACE
-    {KEY_BACKSPACE,                       0x41}, // BACKSPACE
-    {KEY_TAB,                             0x42}, // TAB
-    {KEY_KEYPAD_ENTER,                    0x43}, // ENTER
-    {KEY_RETURN,                          0x2B}, // RETURN
-    {KEY_ESCAPE,                          0x45}, // ESC
-    {KEY_DELETE,                          0x46}, // DEL
-    {KEY_KEYPAD_MINUS,                    0x4A}, // NUM -
-    {KEY_UPARROW,                         0x4C}, // CURSOR U
-    {KEY_DOWNARROW,                       0x4D}, // CURSOR D
-    {KEY_RIGHTARROW,                      0x4E}, // CURSOR R
-    {KEY_LEFTARROW,                       0x4F}, // CURSOR L
-    {KEY_F1,                              0x50}, // F1
-    {KEY_F2,                              0x51}, // F2
-    {KEY_F3,                              0x52}, // F3
-    {KEY_F4,                              0x53}, // F4
-    {KEY_F5,                              0x54}, // F5
-    {KEY_F6,                              0x55}, // F6
-    {KEY_F7,                              0x56}, // F7
-    {KEY_F8,                              0x57}, // F8
-    {KEY_F9,                              0x58}, // F9
-    {KEY_F10,                             0x59}, // F10
-    {KEY_KEYPAD_SLASH,                    0x5C}, // /
-    {KEY_KEYPAD_ASTERIKS,                 0x5D}, // NUM *
-    {KEY_KEYPAD_PLUS,                     0x5E}, // NUM +
-    {KEY_F12,                             0x5F}, // HELP
-    {KEY_LEFTSHIFT,                       0x60}, // LSHIFT
-    {KEY_RIGHTSHIFT,                      0x61}, // RSHIFT
-    {KEY_CAPS_LOCK,                       0x62}, // CAPS
-    {KEY_LEFTCONTROL,                     0x63}, // LCTRL
-    {KEY_LEFTALT,                         0x64}, // LALT
-    {KEY_RIGHTALT,                        0x65}, // RALT
-    {KEY_LEFT_GUI,                        0x66}, // LWIN
-    {KEY_RIGHT_GUI,                       0x67}, // RWIN
-    {KEY_APPLICATION,                     0x5F}, // APP - HELP
-    {KEY_KEYPAD_DECIMAL_SEPARATOR_DELETE, 0x3C}, // KEYPAD '.'
-    {KEY_KEYPAD_NUM_LOCK_AND_CLEAR,       0x68}, // NUMLOCK & CLEAR
-    {KEY_PRINTSCREEN,                     0x0E}, // SPARE
-    {KEY_SCROLL_LOCK,                     0x1C}, // SPARE
-    {KEY_PAUSE,                           0x2C}, // SPARE
-    {KEY_HOME,                            0x3B}, // SPARE
-    {KEY_PAGEUP,                          0x3F}, // PGUP
-    {KEY_PAGEDOWN,                        0x1F}, // PGDOWN
-    {KEY_END1,                            0x49}, // SPARE
-    {KEY_INSERT,                          0x4B}, // SPARE
-    {KEY_NONE,                            0x5B}, // SPARE
-    {KEY_NONE,                            0x6A}, // SPARE
-    {KEY_NONE,                            0x6B}, // SPARE
-    {KEY_NONE,                            0x6C}, // SPARE
-    {KEY_NONE,                            0x6D}, // SPARE
-    {KEY_NONE,                            0x6E}, // SPARE
-    {KEY_NONE,                            0x6F}, // SPARE
+
+/* ===== Static State ===== */
+
+/* Replace O(n) table with a direct 256-entry lookup table for O(1) translation */
+#define AMIGA_KEY_UNMAPPED 0xFF
+
+static const uint8_t usb_to_amiga_lut[256] = {
+    [0x00] = AMIGA_KEY_UNMAPPED, /* KEY_NONE */
+    [0x01] = AMIGA_KEY_UNMAPPED,
+    [0x02] = AMIGA_KEY_UNMAPPED,
+    [0x03] = AMIGA_KEY_UNMAPPED,
+    /* Letters */
+    [0x04] = 0x20, /* A */
+    [0x05] = 0x35, /* B */
+    [0x06] = 0x33, /* C */
+    [0x07] = 0x22, /* D */
+    [0x08] = 0x12, /* E */
+    [0x09] = 0x23, /* F */
+    [0x0A] = 0x24, /* G */
+    [0x0B] = 0x25, /* H */
+    [0x0C] = 0x17, /* I */
+    [0x0D] = 0x26, /* J */
+    [0x0E] = 0x27, /* K */
+    [0x0F] = 0x28, /* L */
+    [0x10] = 0x37, /* M */
+    [0x11] = 0x36, /* N */
+    [0x12] = 0x18, /* O */
+    [0x13] = 0x19, /* P */
+    [0x14] = 0x10, /* Q */
+    [0x15] = 0x13, /* R */
+    [0x16] = 0x21, /* S */
+    [0x17] = 0x14, /* T */
+    [0x18] = 0x16, /* U */
+    [0x19] = 0x34, /* V */
+    [0x1A] = 0x11, /* W */
+    [0x1B] = 0x32, /* X */
+    [0x1C] = 0x15, /* Y */
+    [0x1D] = 0x31, /* Z */
+    /* Numbers */
+    [0x1E] = 0x01, /* 1 */
+    [0x1F] = 0x02, /* 2 */
+    [0x20] = 0x03, /* 3 */
+    [0x21] = 0x04, /* 4 */
+    [0x22] = 0x05, /* 5 */
+    [0x23] = 0x06, /* 6 */
+    [0x24] = 0x07, /* 7 */
+    [0x25] = 0x08, /* 8 */
+    [0x26] = 0x09, /* 9 */
+    [0x27] = 0x0A, /* 0 */
+    /* Common keys */
+    [0x28] = 0x44, /* Enter */
+    [0x29] = 0x45, /* Escape */
+    [0x2A] = 0x41, /* Backspace */
+    [0x2B] = 0x42, /* Tab */
+    [0x2C] = 0x40, /* Space */
+    [0x2D] = 0x0B, /* -_ */
+    [0x2E] = 0x0C, /* =+ */
+    [0x2F] = 0x1A, /* [{ */
+    [0x30] = 0x1B, /* ]} */
+    [0x31] = 0x0D, /* \| */
+    [0x32] = AMIGA_KEY_UNMAPPED, /* Non-US */
+    [0x33] = 0x29, /* ;: */
+    [0x34] = 0x2A, /* '" */
+    [0x35] = 0x00, /* `~ */
+    [0x36] = 0x38, /* ,< */
+    [0x37] = 0x39, /* .> */
+    [0x38] = 0x3A, /* /? */
+    [0x39] = 0x62, /* Caps Lock */
+    /* Function keys */
+    [0x3A] = 0x50, [0x3B] = 0x51, [0x3C] = 0x52, [0x3D] = 0x53,
+    [0x3E] = 0x54, [0x3F] = 0x55, [0x40] = 0x56, [0x41] = 0x57,
+    [0x42] = 0x58, [0x43] = 0x59, [0x44] = AMIGA_KEY_UNMAPPED, [0x45] = 0x5F,
+    /* Print/Scroll/Pause */
+    [0x46] = 0x0E, [0x47] = 0x1C, [0x48] = 0x2C,
+    /* Navigation cluster */
+    [0x49] = 0x4B, [0x4A] = 0x3B, [0x4B] = 0x3F, [0x4C] = 0x46,
+    [0x4D] = 0x49, [0x4E] = 0x1F, [0x4F] = 0x4E, [0x50] = 0x4F,
+    [0x51] = 0x4D, [0x52] = 0x4C,
+    /* Keypad */
+    [0x53] = 0x68, [0x54] = 0x5C, [0x55] = 0x5D, [0x56] = 0x4A,
+    [0x57] = 0x5E, [0x58] = 0x43, [0x59] = 0x1D, [0x5A] = 0x1E,
+    [0x5B] = 0x1F, [0x5C] = 0x2D, [0x5D] = 0x2E, [0x5E] = 0x2F,
+    [0x5F] = 0x3D, [0x60] = 0x3E, [0x61] = 0x3F, [0x62] = 0x0F,
+    [0x63] = 0x3C,
+    /* Misc */
+    [0x64] = AMIGA_KEY_UNMAPPED, [0x65] = 0x5F,
+    [0x85] = 0x38, [0x88] = 0x30, [0x9E] = 0x2B,
+    /* Modifiers */
+    [0xE0] = 0x63, [0xE1] = 0x60, [0xE2] = 0x64, [0xE3] = 0x66,
+    [0xE4] = AMIGA_KEY_UNMAPPED, [0xE5] = 0x61, [0xE6] = 0x65, [0xE7] = 0x67,
 };
 
 static inline uint8_t translate_usb_to_amiga(uint8_t usb_key) {
-    for (uint8_t i = 0; i < KEYCODE_TAB_SIZE; i++) {
-        if (usb_key == scancodeamiga[i][0]) {
-            return scancodeamiga[i][1];
-        }
-    }
-    return usb_key;
+    uint8_t amiga = usb_to_amiga_lut[usb_key];
+    return (amiga == AMIGA_KEY_UNMAPPED) ? usb_key : amiga;
 }
 
 static led_status_t process_lock_key_toggle(uint8_t *lock_bit, bool is_press,
