@@ -329,6 +329,192 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Jumper:SolderJumper_2_Open"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom no)
+			(on_board yes)
+			(property "Reference" "JP"
+				(at 0 2.032 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "SolderJumper_2_Open"
+				(at 0 -2.54 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "~"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Solder Jumper, 2-pole, open"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "solder jumper SPST"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_fp_filters" "SolderJumper*Open*"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "SolderJumper_2_Open_0_1"
+				(polyline
+					(pts
+						(xy -0.254 1.016) (xy -0.254 -1.016)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start -0.254 -1.016)
+					(mid -1.2656 0)
+					(end -0.254 1.016)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start -0.254 -1.016)
+					(mid -1.2656 0)
+					(end -0.254 1.016)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(arc
+					(start 0.254 1.016)
+					(mid 1.2656 0)
+					(end 0.254 -1.016)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0.254 1.016)
+					(mid 1.2656 0)
+					(end 0.254 -1.016)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.254 1.016) (xy 0.254 -1.016)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "SolderJumper_2_Open_1_1"
+				(pin passive line
+					(at -3.81 0 0)
+					(length 2.54)
+					(name "A"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 3.81 0 180)
+					(length 2.54)
+					(name "B"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Switch:SW_Push"
 			(pin_numbers
 				(hide yes)
@@ -4315,6 +4501,16 @@
 	)
 	(wire
 		(pts
+			(xy 125.73 186.69) (xy 125.73 193.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "285a5ec0-15ed-4a6f-95a3-e7fade413317")
+	)
+	(wire
+		(pts
 			(xy 111.76 53.34) (xy 111.76 50.8)
 		)
 		(stroke
@@ -4352,6 +4548,16 @@
 			(type default)
 		)
 		(uuid "323bd927-63f0-4801-b638-7b31279c05d1")
+	)
+	(wire
+		(pts
+			(xy 104.14 186.69) (xy 104.14 193.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "33f5af3b-1e41-4384-958a-19d9851ad409")
 	)
 	(wire
 		(pts
@@ -5273,16 +5479,6 @@
 		)
 		(uuid "46765cf3-6bf1-4538-85ff-143da501e9da")
 	)
-	(label "TX"
-		(at 125.73 186.69 0)
-		(effects
-			(font
-				(size 0.889 0.889)
-			)
-			(justify left bottom)
-		)
-		(uuid "546687e3-3c53-4e48-bb64-aca4fa60a0af")
-	)
 	(label "DATA"
 		(at 134.62 127 180)
 		(effects
@@ -5333,6 +5529,16 @@
 		)
 		(uuid "7d2c484f-6c08-441a-8410-6e45ef8a8ca6")
 	)
+	(label "TX"
+		(at 125.73 200.66 180)
+		(effects
+			(font
+				(size 0.889 0.889)
+			)
+			(justify right bottom)
+		)
+		(uuid "7f573274-e825-48ec-ac6c-a390b76c10b7")
+	)
 	(label "RESET"
 		(at 134.62 139.7 180)
 		(effects
@@ -5352,6 +5558,16 @@
 			(justify left bottom)
 		)
 		(uuid "846df92b-dde0-428c-93f3-eee8ffedbd61")
+	)
+	(label "RX"
+		(at 104.14 200.66 180)
+		(effects
+			(font
+				(size 0.889 0.889)
+			)
+			(justify right bottom)
+		)
+		(uuid "847dd68f-07e0-4842-89a7-6f5d283ed862")
 	)
 	(label "RX"
 		(at 143.51 134.62 0)
@@ -5392,16 +5608,6 @@
 			(justify right bottom)
 		)
 		(uuid "a5bf9786-97bf-45d9-a2b0-6b4364c5c51c")
-	)
-	(label "RX"
-		(at 104.14 186.69 0)
-		(effects
-			(font
-				(size 0.889 0.889)
-			)
-			(justify left bottom)
-		)
-		(uuid "b33f171c-af55-4b90-9ff3-516d8aa815ee")
 	)
 	(label "K1"
 		(at 143.51 137.16 0)
@@ -6047,7 +6253,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Button_Switch_THT:SW_Tactile_SPST_Angled_PTS645Vx83-2LFS"
+		(property "Footprint" "Button_Switch_THT:SW_PUSH_6mm"
 			(at 111.76 113.03 0)
 			(effects
 				(font
@@ -6514,6 +6720,77 @@
 			(project "wmk"
 				(path "/50e6ab38-6170-4710-8e7a-4174999b127b"
 					(reference "#GND01")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Jumper:SolderJumper_2_Open")
+		(at 104.14 196.85 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "45aff473-add6-497b-bf84-bc440299e4d2")
+		(property "Reference" "JP2"
+			(at 106.68 195.5799 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "SolderJumper_2_Open"
+			(at 106.68 198.1199 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 104.14 196.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 104.14 196.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Solder Jumper, 2-pole, open"
+			(at 104.14 196.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "86ba8415-c0f6-4cb8-b67f-7f74e0e8b04b")
+		)
+		(pin "1"
+			(uuid "3d4c70de-6e8b-4f2d-bb62-7a54da77c797")
+		)
+		(instances
+			(project "wmk"
+				(path "/50e6ab38-6170-4710-8e7a-4174999b127b"
+					(reference "JP2")
 					(unit 1)
 				)
 			)
@@ -7082,6 +7359,77 @@
 			(project "wmk"
 				(path "/50e6ab38-6170-4710-8e7a-4174999b127b"
 					(reference "#GND06")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Jumper:SolderJumper_2_Open")
+		(at 125.73 196.85 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "759f0753-0d39-4d17-8725-c2e2208a522f")
+		(property "Reference" "JP3"
+			(at 128.27 195.5799 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "SolderJumper_2_Open"
+			(at 128.27 198.1199 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 125.73 196.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 125.73 196.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Solder Jumper, 2-pole, open"
+			(at 125.73 196.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "df3b893c-ad25-454c-9bc3-e19a40ab94cd")
+		)
+		(pin "1"
+			(uuid "310d6222-dbe5-4b5f-87de-2e4d3f465e3f")
+		)
+		(instances
+			(project ""
+				(path "/50e6ab38-6170-4710-8e7a-4174999b127b"
+					(reference "JP3")
 					(unit 1)
 				)
 			)

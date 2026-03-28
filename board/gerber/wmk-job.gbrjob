@@ -3,9 +3,9 @@
     "GenerationSoftware": {
       "Vendor": "KiCad",
       "Application": "Pcbnew",
-      "Version": "9.0.2"
+      "Version": "9.0.7"
     },
-    "CreationDate": "2025-11-10T19:09:34+00:00"
+    "CreationDate": "2026-03-24T21:51:23+00:00"
   },
   "GeneralSpecs": {
     "ProjectId": {
@@ -46,12 +46,12 @@
     },
     {
       "Path": "wmk-In1_Cu.gbr",
-      "FileFunction": "Copper,L5,Inr",
+      "FileFunction": "Copper,L2,Inr",
       "FilePolarity": "Positive"
     },
     {
       "Path": "wmk-In2_Cu.gbr",
-      "FileFunction": "Copper,L7,Inr",
+      "FileFunction": "Copper,L3,Inr",
       "FilePolarity": "Positive"
     },
     {
