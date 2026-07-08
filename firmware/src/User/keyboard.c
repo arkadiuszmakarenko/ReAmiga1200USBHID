@@ -302,7 +302,7 @@ void amikb_ready (int isready) {
 }
 
 void amikb_reset (void) {
-    static const uint8_t RESET_PULSE_COUNT = 10;
+    static const uint8_t RESET_PULSE_COUNT = 100;
 
     for (uint8_t pulse = 0; pulse < RESET_PULSE_COUNT; pulse++) {
         GPIO_WriteBit (KB_RESET_GPIO_Port, KB_RESET_GPIO_Pin, Bit_RESET);
